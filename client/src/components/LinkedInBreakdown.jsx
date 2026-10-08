@@ -138,7 +138,7 @@ export function LinkedInBreakdown({ data, url, onPdfUploaded }) {
         <div className="alert alert-success" style={{ marginBottom: 18 }}>
           <ShieldCheck size={18} />
           <div>
-            <strong>✓ LinkedIn Analyzed & Verified</strong>
+            <strong>LinkedIn Analyzed & Verified</strong>
             <div style={{ fontSize: '0.82rem', marginTop: 2 }}>
               {experience.length} experience entries · {skills.length} skills · {education.length} education records · {certifications.length} certifications
             </div>

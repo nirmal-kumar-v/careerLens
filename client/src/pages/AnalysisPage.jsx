@@ -8,7 +8,7 @@ import { LeetCodeBreakdown } from '../components/LeetCodeBreakdown';
 import { LinkedInBreakdown } from '../components/LinkedInBreakdown';
 import { PortfolioBreakdown } from '../components/PortfolioBreakdown';
 import { PersonalizedLearningRoadmap } from '../components/PersonalizedLearningRoadmap';
-import { Play, RefreshCw, BookOpen, FolderGit2, MapPin, Loader2, AlertCircle, ExternalLink, Sparkles } from 'lucide-react';
+import { Play, RefreshCw, BookOpen, FolderGit2, MapPin, Loader2, AlertCircle, ExternalLink, Sparkles, CheckCircle2, XCircle, ArrowRight } from 'lucide-react';
 
 const SCORE_LABELS = {
   technicalSkills: 'Technical Skills',
@@ -60,7 +60,7 @@ export default function AnalysisPage({ initialTab }) {
 
   const runAnalysis = async () => {
     setRunning(true);
-    toast('Running analysis — this may take 1–2 minutes…', { icon: '⚙️', duration: 8000 });
+    toast('Running analysis — this may take 1–2 minutes…', { duration: 8000 });
     try {
       const { data } = await api.post('/analysis/run');
       setAnalysis(data.evaluation ? { ...data.evaluation, status: 'complete' } : null);
@@ -246,7 +246,8 @@ export default function AnalysisPage({ initialTab }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {role.strengths.map((s, i) => (
                           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                            <span style={{ color: 'var(--green-light)', fontWeight: 700 }}>✓</span> {s}
+                            <CheckCircle2 size={13} style={{ color: 'var(--green-light)', flexShrink: 0 }} />
+                            <span>{s}</span>
                           </div>
                         ))}
                       </div>
@@ -258,7 +259,8 @@ export default function AnalysisPage({ initialTab }) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {role.gaps.map((g, i) => (
                           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                            <span style={{ color: 'var(--red-light)', fontWeight: 700 }}>✗</span> {g}
+                            <XCircle size={13} style={{ color: 'var(--red-light)', flexShrink: 0 }} />
+                            <span>{g}</span>
                           </div>
                         ))}
                       </div>
@@ -378,11 +380,12 @@ export default function AnalysisPage({ initialTab }) {
 
                           <div>
                             {repo.isFork ? (
-                              <span className={`badge ${forkClassification === 'upstream_contributor' ? 'badge-verified' : 'badge-partial'}`} style={{ fontSize: '0.74rem' }}>
+                              <span className={`badge ${forkClassification === 'upstream_contributor' ? 'badge-verified' : 'badge-partial'}`} style={{ fontSize: '0.74rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                <CheckCircle2 size={12} />
                                 {forkClassification === 'upstream_contributor'
-                                  ? '✓ Fork · Upstream Contributor'
+                                  ? 'Fork · Upstream Contributor'
                                   : forkClassification === 'independent_modifications'
-                                  ? '⚡ Fork · Independent Modifications'
+                                  ? 'Fork · Independent Modifications'
                                   : 'Fork'}
                               </span>
                             ) : (
@@ -544,18 +547,21 @@ export default function AnalysisPage({ initialTab }) {
                       <div key={key} className="card" style={{ padding: '16px 20px' }}>
                         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: '0.9rem' }}>{label}</div>
                         {s.details.awarded && (
-                          <div style={{ fontSize: '0.78rem', color: 'var(--green)', marginBottom: 4 }}>
-                            ✓ {s.details.awarded}
+                          <div style={{ fontSize: '0.78rem', color: 'var(--green-light)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
+                            <span>{s.details.awarded}</span>
                           </div>
                         )}
                         {s.details.reduced && (
-                          <div style={{ fontSize: '0.78rem', color: 'var(--red)', marginBottom: 4 }}>
-                            ✗ {s.details.reduced}
+                          <div style={{ fontSize: '0.78rem', color: 'var(--red-light)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <XCircle size={12} style={{ flexShrink: 0 }} />
+                            <span>{s.details.reduced}</span>
                           </div>
                         )}
                         {s.details.improve && (
-                          <div style={{ fontSize: '0.78rem', color: 'var(--yellow)' }}>
-                            → {s.details.improve}
+                          <div style={{ fontSize: '0.78rem', color: 'var(--horizon-orange)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <ArrowRight size={12} style={{ flexShrink: 0 }} />
+                            <span>{s.details.improve}</span>
                           </div>
                         )}
                       </div>

@@ -1,18 +1,24 @@
 import { useState } from 'react';
-import { PlusCircle, Sparkles, CheckCircle2, FileCheck } from 'lucide-react';
+import { PlusCircle, Sparkles, CheckCircle2, XCircle, Zap, AlertTriangle, HelpCircle } from 'lucide-react';
 import { AddProofModal } from './AddProofModal';
 
 export function ClaimBadge({ status }) {
   const map = {
-    verified: { cls: 'badge-verified', label: '✓ Verified' },
-    supported: { cls: 'badge-verified', label: '✓ Supported' },
-    partially_supported: { cls: 'badge-partial', label: '⚡ Partial Evidence' },
-    unsupported: { cls: 'badge-unsupported', label: '✗ Unsupported' },
-    requires_proof: { cls: 'badge-proof', label: '⚠ Needs Code Proof' },
-    not_verifiable: { cls: 'badge-blue', label: '~ Not Verifiable' },
+    verified: { cls: 'badge-verified', icon: CheckCircle2, label: 'Verified' },
+    supported: { cls: 'badge-verified', icon: CheckCircle2, label: 'Supported' },
+    partially_supported: { cls: 'badge-partial', icon: Zap, label: 'Partial Evidence' },
+    unsupported: { cls: 'badge-unsupported', icon: XCircle, label: 'Unsupported' },
+    requires_proof: { cls: 'badge-proof', icon: AlertTriangle, label: 'Needs Code Proof' },
+    not_verifiable: { cls: 'badge-blue', icon: HelpCircle, label: 'Not Verifiable' },
   };
-  const { cls, label } = map[status] || { cls: 'badge-pending', label: status };
-  return <span className={`badge ${cls}`}>{label}</span>;
+  const item = map[status] || { cls: 'badge-pending', icon: HelpCircle, label: status };
+  const Icon = item.icon;
+  return (
+    <span className={`badge ${item.cls}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      <Icon size={12} style={{ flexShrink: 0 }} />
+      <span>{item.label}</span>
+    </span>
+  );
 }
 
 export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
@@ -26,7 +32,7 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
         className="anim-fade-up"
         style={{
           background: 'var(--bg-surface)',
-          border: claim.updatedFromProof ? '1px solid rgba(66, 234, 255, 0.35)' : '1px solid var(--border)',
+          border: claim.updatedFromProof ? '1px solid var(--border-cyan)' : '1px solid var(--border)',
           borderRadius: 'var(--radius)',
           padding: '18px 20px',
           marginBottom: '14px',
@@ -60,13 +66,13 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
                 onClick={() => setShowModal(true)}
                 className="btn btn-secondary btn-sm"
                 style={{
-                  padding: '4px 10px',
+                  padding: '5px 11px',
                   fontSize: '0.78rem',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 5,
-                  borderColor: 'rgba(66, 234, 255, 0.3)',
-                  color: 'var(--cyan)'
+                  borderColor: 'rgba(66, 234, 255, 0.35)',
+                  color: 'var(--horizon-cyan)'
                 }}
               >
                 <PlusCircle size={13} />
@@ -87,7 +93,7 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
             padding: '12px 14px',
             borderRadius: 'var(--radius-sm)',
             border: '1px solid var(--border-subtle)',
-            borderLeft: claim.updatedFromProof ? '3px solid var(--cyan)' : '3px solid var(--accent)'
+            borderLeft: claim.updatedFromProof ? '3px solid var(--horizon-cyan)' : '3px solid var(--horizon-blue)'
           }}>
             {claim.explanation}
           </div>
@@ -101,7 +107,7 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
             </div>
             {claim.evidenceDetails.map((d, i) => (
               <div key={i} style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', color: d.source === 'user_provided_proof' ? 'var(--cyan)' : 'var(--accent-light)', borderColor: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.3)' : 'rgba(99,102,241,0.25)', background: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.1)' : 'var(--accent-glow)' }}>
+                <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', color: d.source === 'user_provided_proof' ? 'var(--horizon-cyan)' : 'var(--horizon-blue)', borderColor: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.3)' : 'rgba(66,114,255,0.3)', background: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.1)' : 'rgba(66,114,255,0.12)' }}>
                   {d.source === 'user_provided_proof' ? 'user proof (pending validation)' : d.source}
                 </span>
                 <span>{d.detail}</span>

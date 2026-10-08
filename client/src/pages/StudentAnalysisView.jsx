@@ -7,7 +7,7 @@ import { LeetCodeBreakdown } from '../components/LeetCodeBreakdown';
 import { LinkedInBreakdown } from '../components/LinkedInBreakdown';
 import { PortfolioBreakdown } from '../components/PortfolioBreakdown';
 import { PersonalizedLearningRoadmap } from '../components/PersonalizedLearningRoadmap';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react';
 
 const SCORE_LABELS = {
   technicalSkills: 'Technical Skills',
@@ -135,12 +135,22 @@ export default function StudentAnalysisView() {
                   <div className="card-title" style={{ marginBottom: 16 }}>Role Analysis</div>
                   {role.targetRole && <div style={{ fontWeight: 700, marginBottom: 12 }}>Target: {role.targetRole}</div>}
                   <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>STRENGTHS</div>
-                    {(role.strengths || []).map((s, i) => <div key={i} style={{ fontSize: '0.82rem', color: 'var(--green)', marginBottom: 3 }}>✓ {s}</div>)}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>STRENGTHS</div>
+                    {(role.strengths || []).map((s, i) => (
+                      <div key={i} style={{ fontSize: '0.82rem', color: 'var(--green-light)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
+                        <span>{s}</span>
+                      </div>
+                    ))}
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 4 }}>GAPS</div>
-                    {(role.gaps || []).map((g, i) => <div key={i} style={{ fontSize: '0.82rem', color: 'var(--red)', marginBottom: 3 }}>✗ {g}</div>)}
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: 6, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GAPS</div>
+                    {(role.gaps || []).map((g, i) => (
+                      <div key={i} style={{ fontSize: '0.82rem', color: 'var(--red-light)', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <XCircle size={13} style={{ flexShrink: 0 }} />
+                        <span>{g}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

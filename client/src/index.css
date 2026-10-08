@@ -3,10 +3,17 @@
 /* ── EXACT GLOWING HORIZON DESIGN SYSTEM ── */
 :root {
   /* ── Mandatory 4 Accent Colors ── */
-  --horizon-amber: #FFB343; /* Warm highlight, important metrics, attention states */
-  --horizon-cyan: #42EAFF;  /* Primary cool interaction accent, links, focused inputs, active nav */
-  --horizon-blue: #4272FF;  /* Primary action/button accent, controls, gradient foundation */
-  --horizon-coral: #FF7E42; /* Warm secondary accent, hover details, achievements */
+  --horizon-orange: #FFB343; /* Warm highlight, important metrics, attention states */
+  --horizon-cyan: #42EAFF;   /* Primary cool interaction accent, links, focused inputs, active nav */
+  --horizon-blue: #4272FF;   /* Primary action/button accent, controls, gradient foundation */
+  --horizon-coral: #FF7E42;  /* Warm secondary accent, hover details, achievements */
+  --horizon-amber: var(--horizon-orange);
+
+  /* ── Text Accent Colors ── */
+  --text-cyan: var(--horizon-cyan);
+  --text-blue: var(--horizon-blue);
+  --text-orange: var(--horizon-orange);
+  --text-coral: var(--horizon-coral);
 
   /* ── Core Dark Horizon Surface Hierarchy ── */
   --bg-base: #08090d;
@@ -23,6 +30,7 @@
   --border-strong: rgba(255, 255, 255, 0.16);
   --border-cyan: rgba(66, 234, 255, 0.35);
   --border-blue: rgba(66, 114, 255, 0.35);
+  --border-orange: rgba(255, 179, 67, 0.35);
   --border-amber: rgba(255, 179, 67, 0.35);
   --border-coral: rgba(255, 126, 66, 0.35);
 
@@ -49,7 +57,12 @@
   --blue-bg: rgba(66, 114, 255, 0.12);
   --blue-glow: rgba(66, 114, 255, 0.28);
 
-  --amber: var(--horizon-amber);
+  --orange: var(--horizon-orange);
+  --orange-light: #ffc977;
+  --orange-bg: rgba(255, 179, 67, 0.12);
+  --orange-glow: rgba(255, 179, 67, 0.25);
+
+  --amber: var(--horizon-orange);
   --amber-light: #ffc977;
   --amber-bg: rgba(255, 179, 67, 0.12);
   --amber-glow: rgba(255, 179, 67, 0.25);

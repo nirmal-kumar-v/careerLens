@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
-import { Upload, FileText, Loader2, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, Clock, CheckCircle, XCircle, Paperclip } from 'lucide-react';
 
 const PROOF_TYPES = [
   { value: 'project_link', label: 'Project Link' },
@@ -121,8 +121,8 @@ export default function ProofPage() {
                 onClick={() => fileRef.current.click()}
               >
                 <input ref={fileRef} type="file" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
-                <div style={{ fontSize: '0.875rem' }}>
-                  {file ? `📎 ${file.name}` : 'Click to attach a file (screenshot, certificate, PDF, etc.)'}
+                <div style={{ fontSize: '0.875rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                  {file ? <><Paperclip size={15} color="var(--horizon-cyan)" /> {file.name}</> : 'Click to attach a file (screenshot, certificate, PDF, etc.)'}
                 </div>
               </div>
             </div>

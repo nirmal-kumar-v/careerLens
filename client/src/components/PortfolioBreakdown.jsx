@@ -239,9 +239,12 @@ export function PortfolioBreakdown({ data, url }) {
                   )}
 
                   {proj.highlights?.length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: '0.76rem', color: 'var(--green)' }}>
+                    <div style={{ marginTop: 8, fontSize: '0.76rem', color: 'var(--green-light)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {proj.highlights.map((h, i) => (
-                        <div key={i}>✓ {h}</div>
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <CheckCircle size={11} style={{ flexShrink: 0 }} />
+                          <span>{h}</span>
+                        </div>
                       ))}
                     </div>
                   )}

@@ -212,8 +212,9 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {strongSkills.map((skill, idx) => (
-                    <span key={idx} className="badge badge-verified" style={{ padding: '5px 12px', fontSize: '0.82rem' }}>
-                      ✓ {skill}
+                    <span key={idx} className="badge badge-verified" style={{ padding: '5px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
+                      <span>{skill}</span>
                     </span>
                   ))}
                 </div>
@@ -635,8 +636,9 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
                         </div>
                       </div>
                       {milestone.estimated_total_time && (
-                        <span className="badge" style={{ background: 'var(--bg-card)', color: 'var(--horizon-amber)', border: '1px solid rgba(255, 179, 67, 0.25)', fontSize: '0.75rem' }}>
-                          ⏱ {milestone.estimated_total_time}
+                        <span className="badge" style={{ background: 'var(--bg-card)', color: 'var(--horizon-orange)', border: '1px solid rgba(255, 179, 67, 0.25)', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <Clock size={12} />
+                          <span>{milestone.estimated_total_time}</span>
                         </span>
                       )}
                     </div>

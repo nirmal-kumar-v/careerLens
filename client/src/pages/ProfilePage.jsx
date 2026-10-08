@@ -186,7 +186,9 @@ export default function ProfilePage() {
               <><div className="big-spinner" style={{ margin: '0 auto 12px' }} /><p>Uploading resume…</p></>
             ) : (
               <>
-                <div className="upload-zone-icon">📄</div>
+                <div className="upload-zone-icon" style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                  <FileText size={32} color="var(--horizon-cyan)" />
+                </div>
                 <div className="upload-zone-title" style={{ fontWeight: 600 }}>
                   {resume ? (resumeFile || 'Resume uploaded') : 'Drop your resume here or click to browse'}
                 </div>
@@ -230,7 +232,9 @@ export default function ProfilePage() {
               <><div className="big-spinner" style={{ margin: '0 auto 12px' }} /><p>Uploading…</p></>
             ) : (
               <>
-                <div className="upload-zone-icon">💼</div>
+                <div className="upload-zone-icon" style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                  <Briefcase size={32} color="var(--horizon-coral)" />
+                </div>
                 <div className="upload-zone-title">
                   {linkedinPdf ? (linkedinPdfFile || 'LinkedIn PDF uploaded — click to replace') : 'Upload exported LinkedIn PDF (optional)'}
                 </div>

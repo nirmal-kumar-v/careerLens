@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { ScoreRing } from '../components/ScoreComponents';
-import { BarChart3, User, FileText, AlertCircle, CheckCircle, Clock, ArrowRight } from 'lucide-react';
+import { BarChart3, User, FileText, CheckCircle, Clock, ArrowRight, Check, X, Sparkles } from 'lucide-react';
 
 export default function StudentDashboard() {
   const { user } = useAuth();
@@ -34,7 +34,7 @@ export default function StudentDashboard() {
   return (
     <div className="anim-fade-up">
       <div className="page-header">
-        <h1 className="page-title">Welcome, {user?.name?.split(' ')[0]} 👋</h1>
+        <h1 className="page-title">Welcome, {user?.name?.split(' ')[0]}</h1>
         <p className="page-subtitle">Your real-time career readiness command center</p>
       </div>
 
@@ -69,7 +69,7 @@ export default function StudentDashboard() {
         <div className="steps-bar" style={{ marginBottom: 20 }}>
           {steps.map((s, i) => (
             <div key={i} className={`step-item ${s.done ? 'done' : i === steps.findIndex(x => !x.done) ? 'active' : ''}`}>
-              <div className="step-circle">{s.done ? '✓' : i + 1}</div>
+              <div className="step-circle">{s.done ? <Check size={14} /> : i + 1}</div>
               <span className="step-label">{s.label}</span>
             </div>
           ))}
@@ -89,22 +89,22 @@ export default function StudentDashboard() {
         <div className="stat-card">
           <div className="stat-label">Readiness Score</div>
           {dash?.overallScore != null
-            ? <div className="stat-value" style={{ color: dash.overallScore >= 70 ? 'var(--green-light)' : 'var(--yellow-light)' }}>{dash.overallScore}</div>
+            ? <div className="stat-value" style={{ color: dash.overallScore >= 70 ? 'var(--horizon-cyan)' : 'var(--horizon-orange)' }}>{dash.overallScore}</div>
             : <div className="stat-value" style={{ color: 'var(--text-muted)' }}>—</div>
           }
           <div className="stat-sub">{dash?.hasAnalysis ? 'From latest diagnostic' : 'Not yet analyzed'}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Resume Status</div>
-          <div className="stat-value" style={{ color: hasResume ? 'var(--green-light)' : 'var(--red-light)', fontSize: '1.35rem' }}>
-            {hasResume ? '✓ Uploaded' : '✗ Missing'}
+          <div className="stat-value" style={{ color: hasResume ? 'var(--green-light)' : 'var(--red-light)', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {hasResume ? <><Check size={16} /> Uploaded</> : <><X size={16} /> Missing</>}
           </div>
           <div className="stat-sub">Mandatory source</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">GitHub Activity</div>
-          <div className="stat-value" style={{ color: hasGithub ? 'var(--green-light)' : 'var(--red-light)', fontSize: '1.35rem' }}>
-            {hasGithub ? '✓ Connected' : '✗ Missing'}
+          <div className="stat-value" style={{ color: hasGithub ? 'var(--green-light)' : 'var(--red-light)', fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {hasGithub ? <><Check size={16} /> Connected</> : <><X size={16} /> Missing</>}
           </div>
           <div className="stat-sub">Code ownership proof</div>
         </div>
@@ -141,7 +141,7 @@ export default function StudentDashboard() {
               </div>
             ) : (
               <div className="empty-state">
-                <BarChart3 size={44} style={{ color: 'var(--accent-light)' }} />
+                <BarChart3 size={44} style={{ color: 'var(--horizon-cyan)' }} />
                 <h3>No analysis available</h3>
                 <p>Complete your profile connections then run a diagnostic to get your personalized employability score.</p>
                 {profileComplete && (
@@ -157,8 +157,8 @@ export default function StudentDashboard() {
         {/* Quick actions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Link to="/profile" className="card card-interactive" style={{ display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none' }}>
-            <div style={{ width: 46, height: 46, borderRadius: 'var(--radius-sm)', background: 'var(--accent-glow)', border: '1px solid rgba(99,102,241,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <User size={22} color="var(--accent-light)" />
+            <div style={{ width: 46, height: 46, borderRadius: 'var(--radius-sm)', background: 'var(--cyan-bg)', border: '1px solid rgba(66,234,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <User size={22} color="var(--horizon-cyan)" />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: '0.98rem', marginBottom: 3, color: 'var(--text-primary)' }}>Profile & External Links</div>
@@ -168,8 +168,8 @@ export default function StudentDashboard() {
           </Link>
 
           <Link to="/analysis" className="card card-interactive" style={{ display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none' }}>
-            <div style={{ width: 46, height: 46, borderRadius: 'var(--radius-sm)', background: 'var(--green-bg)', border: '1px solid rgba(16,185,129,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <BarChart3 size={22} color="var(--green-light)" />
+            <div style={{ width: 46, height: 46, borderRadius: 'var(--radius-sm)', background: 'var(--blue-bg)', border: '1px solid rgba(66,114,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <BarChart3 size={22} color="var(--horizon-cyan)" />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: '0.98rem', marginBottom: 3, color: 'var(--text-primary)' }}>Evidence-Based Analysis</div>
@@ -179,8 +179,8 @@ export default function StudentDashboard() {
           </Link>
 
           <Link to="/proof" className="card card-interactive" style={{ display: 'flex', alignItems: 'center', gap: 16, textDecoration: 'none' }}>
-            <div style={{ width: 46, height: 46, borderRadius: 'var(--radius-sm)', background: 'var(--purple-bg)', border: '1px solid rgba(139,92,246,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <FileText size={22} color="var(--purple-light)" />
+            <div style={{ width: 46, height: 46, borderRadius: 'var(--radius-sm)', background: 'var(--coral-bg)', border: '1px solid rgba(255,126,66,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <FileText size={22} color="var(--horizon-coral)" />
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: '0.98rem', marginBottom: 3, color: 'var(--text-primary)' }}>Proof of Work Submissions</div>
