@@ -7,8 +7,7 @@ import { ClaimCard } from '../components/ClaimCard';
 import { LeetCodeBreakdown } from '../components/LeetCodeBreakdown';
 import { LinkedInBreakdown } from '../components/LinkedInBreakdown';
 import { PortfolioBreakdown } from '../components/PortfolioBreakdown';
-import { PersonalizedLearningRoadmap } from '../components/PersonalizedLearningRoadmap';
-import { Play, RefreshCw, BookOpen, FolderGit2, MapPin, Loader2, AlertCircle, ExternalLink } from 'lucide-react';
+import { Play, RefreshCw, BookOpen, FolderGit2, MapPin, Loader2, AlertCircle, ExternalLink, Sparkles } from 'lucide-react';
 
 const SCORE_LABELS = {
   technicalSkills: 'Technical Skills',
@@ -50,6 +49,19 @@ export default function AnalysisPage() {
       toast.error(sourceErrors || err.response?.data?.error || 'Analysis failed');
     } finally {
       setRunning(false);
+    }
+  };
+
+  const handleProofSuccess = async (result) => {
+    try {
+      const r = await api.get('/student/analysis');
+      if (r.data.exists) {
+        setAnalysis(r.data.analysis);
+      } else if (result?.analysis) {
+        setAnalysis(result.analysis);
+      }
+    } catch (e) {
+      if (result?.analysis) setAnalysis(result.analysis);
     }
   };
 
@@ -125,6 +137,52 @@ export default function AnalysisPage() {
 
       {analysis && !running && (
         <>
+          {/* Updated from proof banner */}
+          {analysis.updatedFromProof && (
+            <div className="card anim-fade-up" style={{
+              marginBottom: 20,
+              background: 'linear-gradient(135deg, rgba(66, 234, 255, 0.08) 0%, rgba(14, 17, 24, 0.95) 100%)',
+              border: '1px solid rgba(66, 234, 255, 0.3)',
+              boxShadow: '0 0 20px rgba(66, 234, 255, 0.08)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge badge-verified" style={{ background: 'rgba(66, 234, 255, 0.2)', color: 'var(--cyan)' }}>
+                    <Sparkles size={12} style={{ marginRight: 4, verticalAlign: '-1px' }} />
+                    Updated from added proof
+                  </span>
+                  {analysis.latestProofUpdate && (
+                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                      {analysis.latestProofUpdate.skill}
+                    </span>
+                  )}
+                </div>
+                {analysis.previousScore !== null && analysis.previousScore !== undefined && (
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Previous Score: {analysis.previousScore}</span>
+                    <span>→</span>
+                    <span style={{ color: 'var(--cyan)' }}>Updated Score: {overall}</span>
+                    {analysis.scoreChange > 0 && (
+                      <span className="tag" style={{ color: 'var(--green-light)', background: 'var(--green-bg)', borderColor: 'var(--green)' }}>
+                        +{analysis.scoreChange} pts
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+              {analysis.scoreChangeReason && (
+                <div style={{ fontSize: '0.86rem', color: 'var(--text-primary)', lineHeight: 1.5, marginTop: 4 }}>
+                  <strong>Why it changed:</strong> {analysis.scoreChangeReason}
+                </div>
+              )}
+              {analysis.latestProof && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 6 }}>
+                  <strong>Added proof:</strong> {analysis.latestProof.type === 'file' ? analysis.latestProof.fileName : (analysis.latestProof.source_url || analysis.latestProof.url)}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Tabs */}
           <div className="tabs">
             {tabs.map(t => (
@@ -339,7 +397,15 @@ export default function AnalysisPage() {
               </div>
               {claims.length === 0
                 ? <div className="empty-state"><h3>No claims found</h3><p>Run analysis to see claim validation.</p></div>
-                : claims.map((c, i) => <ClaimCard key={i} claim={c} />)
+                : claims.map((c, i) => (
+                  <ClaimCard 
+                    key={c.skill || i} 
+                    claim={c} 
+                    analysisId={analysis._id} 
+                    studentId={analysis.studentId}
+                    onProofAdded={handleProofSuccess}
+                  />
+                ))
               }
             </div>
           )}

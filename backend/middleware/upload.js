@@ -45,7 +45,7 @@ const linkedinStorage = multer.diskStorage({
 
 function fileFilter(req, file, cb) {
   const allowedResume = ['.pdf', '.docx'];
-  const allowedProof = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.doc', '.docx', '.zip'];
+  const allowedProof = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.doc', '.docx', '.zip', '.txt', '.md', '.json', '.csv'];
   const allowedLinkedin = ['.pdf'];
   const ext = path.extname(file.originalname).toLowerCase();
 
@@ -57,9 +57,9 @@ function fileFilter(req, file, cb) {
     if (allowedLinkedin.includes(ext)) return cb(null, true);
     return cb(new Error('LinkedIn profile export must be a PDF file'));
   }
-  if (file.fieldname === 'proofFile') {
+  if (['proofFile', 'file', 'proof', 'proofDoc'].includes(file.fieldname)) {
     if (allowedProof.includes(ext)) return cb(null, true);
-    return cb(new Error('Invalid proof file type'));
+    return cb(new Error(`Invalid proof file type (${ext}). Allowed: PDF, DOC/DOCX, TXT, images, ZIP`));
   }
   cb(null, true);
 }
@@ -82,5 +82,11 @@ const uploadProof = multer({
   limits: { fileSize: 20 * 1024 * 1024 }
 }).single('proofFile');
 
-module.exports = { uploadResume, uploadLinkedinPdf, uploadProof };
+const uploadProofFlexible = multer({
+  storage: proofStorage,
+  fileFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }
+}).any();
+
+module.exports = { uploadResume, uploadLinkedinPdf, uploadProof, uploadProofFlexible };
 

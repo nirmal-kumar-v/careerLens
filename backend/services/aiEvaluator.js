@@ -136,7 +136,7 @@ function buildPlainTextInput(evidence, targetRole, extractedData) {
   }
 
   // ── CLAIM VALIDATION ──
-  const claimValidation = buildClaimValidation(evidence);
+  const claimValidation = buildClaimValidation(evidence, extractedData);
   if (claimValidation.length) {
     const verified = claimValidation.filter(c => c.status === 'verified');
     const partial = claimValidation.filter(c => c.status === 'partially_supported');
@@ -149,7 +149,7 @@ function buildPlainTextInput(evidence, targetRole, extractedData) {
         : c.status === 'partially_supported' ? 'WEAK'
         : c.status === 'requires_proof' ? 'UNSUPPORTED'
         : 'NOT_VERIFIABLE';
-      lines.push(`${c.skill} — ${label}`);
+      lines.push(`${c.skill} — ${label}${c.explanation ? ` (${c.explanation})` : ''}`);
     }
     lines.push('');
     lines.push(`Summary: ${verified.length} verified, ${partial.length} weak, ${unsupported.length} unsupported, ${unverifiable.length} not verifiable`);
@@ -160,11 +160,8 @@ function buildPlainTextInput(evidence, targetRole, extractedData) {
     if (evidenced.length) {
       lines.push('EVIDENCE MAPPING:');
       for (const c of evidenced) {
-        const repoNames = (c.evidenceDetails || [])
-          .filter(d => d.source?.includes('github'))
-          .map(d => d.detail)
-          .join('; ');
-        lines.push(`${c.skill} -> ${c.evidenceIn.join(', ')}${repoNames ? ' (' + repoNames.substring(0, 120) + ')' : ''}`);
+        const detailsStr = (c.evidenceDetails || []).map(d => `[${d.source}]: ${d.detail}`).join('; ');
+        lines.push(`${c.skill} -> ${c.evidenceIn.join(', ')}${detailsStr ? ' (' + detailsStr.substring(0, 140) + ')' : ''}`);
       }
       lines.push('');
     }
@@ -174,10 +171,7 @@ function buildPlainTextInput(evidence, targetRole, extractedData) {
     if (gaps.length) {
       lines.push('MISSING / WEAK AREAS:');
       for (const g of gaps) {
-        const reason = g.status === 'requires_proof'
-          ? `No GitHub evidence found for ${g.skill}`
-          : `${g.skill} evidence is weak or limited`;
-        lines.push(`- ${reason}`);
+        lines.push(`- ${g.skill}: ${g.explanation || 'Evidence is weak or unobserved'}`);
       }
       lines.push('');
     }
@@ -431,63 +425,320 @@ Be thorough, fair, candidate-specific, and evidence-based. Return ONLY the JSON 
 //  CLAIM VALIDATION (reused by both AI and deterministic paths)
 // ═══════════════════════════════════════════════════════════════
 
-function buildClaimValidation(evidence) {
+function getSkillDomain(skillName) {
+  const s = String(skillName || '').toLowerCase().trim();
+  const normalized = normalizeSkill(s);
+
+  // DSA / Algorithms / Problem Solving / Competitive Programming
+  if (
+    normalized.includes('dsa') ||
+    normalized.includes('datastructure') ||
+    normalized.includes('algorithm') ||
+    normalized.includes('problemsolv') ||
+    normalized.includes('competitiveprogram') ||
+    normalized.includes('leetcode') ||
+    normalized.includes('gfg') ||
+    normalized.includes('geeksforgeeks') ||
+    normalized.includes('codeforces') ||
+    normalized.includes('hackerrank') ||
+    ['array', 'arrays', 'string', 'strings', 'tree', 'trees', 'graph', 'graphs', 'dynamicprogramming', 'dp', 'binarysearch', 'recursion', 'backtracking', 'greedy', 'trie', 'linkedlist', 'stack', 'stacks', 'queue', 'queues', 'heap', 'hashing', 'sorting'].includes(normalized)
+  ) {
+    return 'dsa';
+  }
+
+  // Frontend / UI Frameworks
+  if (
+    ['react', 'reactjs', 'vue', 'vuejs', 'angular', 'angularjs', 'svelte', 'nextjs', 'next', 'nuxtjs', 'html', 'html5', 'css', 'css3', 'tailwind', 'tailwindcss', 'bootstrap', 'sass', 'scss', 'redux', 'mobx', 'zustand', 'jquery', 'webpack', 'vite', 'frontend', 'webdevelopment'].includes(normalized) ||
+    s.includes('react') || s.includes('tailwind') || s.includes('bootstrap') || s.includes('frontend')
+  ) {
+    return 'frontend';
+  }
+
+  // Design / UI/UX
+  if (
+    ['figma', 'uiux', 'uiuxdesign', 'adobexd', 'photoshop', 'illustrator', 'wireframing', 'prototyping', 'designsystem', 'canva'].includes(normalized) ||
+    s.includes('figma') || s.includes('ui/ux') || s.includes('design')
+  ) {
+    return 'design';
+  }
+
+  // Programming Languages
+  if (
+    ['javascript', 'js', 'typescript', 'ts', 'python', 'java', 'cpp', 'c', 'cplusplus', 'csharp', 'cs', 'go', 'golang', 'rust', 'ruby', 'php', 'swift', 'kotlin', 'dart', 'r', 'scala', 'sql', 'plsql', 'bash', 'shell'].includes(normalized)
+  ) {
+    return 'language';
+  }
+
+  // Soft Skills / Methodologies
+  if (
+    ['agile', 'scrum', 'jira', 'leadership', 'communication', 'teamwork', 'projectmanagement', 'timemanagement'].includes(normalized)
+  ) {
+    return 'methodology';
+  }
+
+  // Backend / Cloud / DevOps / Database / System
+  return 'backend_system';
+}
+
+function buildClaimValidation(evidence, extractedData = {}) {
   const claimed = [...new Map([
     ...(evidence.claimedSkills || []),
     ...(evidence.claimedTechnologies || [])
   ].filter(Boolean).map(skill => [normalizeSkill(skill), skill])).values()];
   const observed = evidence.observedTechnologies || [];
-  const githubUnavailable = (evidence.missingSources || []).includes('github');
+  
+  const github = extractedData.github || {};
+  const leetcode = extractedData.leetcode || {};
+  const gfg = extractedData.gfg || {};
+  const portfolio = extractedData.portfolio || {};
+  const linkedin = extractedData.linkedin || {};
+  const figma = extractedData.figma || {};
+  const resume = extractedData.resume || {};
+
+  const githubProjects = (evidence.observedProjects || []).filter(project => project.source === 'github');
+  const portfolioProjects = (evidence.observedProjects || []).filter(project => project.source === 'portfolio');
+  const resumeProjects = resume.projects || evidence.claimedProjects || [];
 
   return claimed.map(skill => {
+    const domain = getSkillDomain(skill);
     const matches = observed.filter(item => normalizeSkill(item.tech) === normalizeSkill(skill));
-    const githubMatches = matches.filter(item => (item.sources || []).includes('github'));
-    const githubProjects = (evidence.observedProjects || []).filter(project => project.source === 'github');
     const matchingRepos = githubProjects.filter(project =>
-      (project.technologies || []).some(technology => normalizeSkill(technology) === normalizeSkill(skill))
+      (project.technologies || []).some(technology => normalizeSkill(technology) === normalizeSkill(skill)) ||
+      normalizeSkill(project.name).includes(normalizeSkill(skill)) ||
+      (project.description && project.description.toLowerCase().includes(skill.toLowerCase()))
     );
-    const sources = [...new Set(matches.flatMap(item => item.sources || []))];
-    const evidenceDetails = matches.map(item => ({
-      source: (item.sources || []).join(', '),
-      detail: [
-        item.evidence || `Observed ${item.tech} in linked evidence.`,
-        matchingRepos.length ? `Found in repositories: ${matchingRepos.map(repo => repo.name).join(', ')}.` : ''
-      ].filter(Boolean).join(' '),
-      strength: item.strengthSignal || 'weak'
-    }));
-    const hasStrongEvidence = githubMatches.some(item => item.strengthSignal === 'strong');
-    const status = githubUnavailable && matches.length === 0
-      ? 'not_verifiable'
-      : githubMatches.length === 0
-        ? 'requires_proof'
-        : hasStrongEvidence || sources.length > 1
-          ? 'verified'
-          : 'partially_supported';
+    const matchingPortfolioProjects = portfolioProjects.filter(project =>
+      (project.technologies || []).some(technology => normalizeSkill(technology) === normalizeSkill(skill)) ||
+      normalizeSkill(project.name).includes(normalizeSkill(skill)) ||
+      (project.description && project.description.toLowerCase().includes(skill.toLowerCase()))
+    );
+    const matchingResumeProjects = resumeProjects.filter(project =>
+      (project.technologies || []).some(technology => normalizeSkill(technology) === normalizeSkill(skill)) ||
+      normalizeSkill(project.name).includes(normalizeSkill(skill)) ||
+      (project.description && project.description.toLowerCase().includes(skill.toLowerCase()))
+    );
 
-    if (status === 'requires_proof') {
-      const detected = [...new Set(githubProjects.flatMap(project => project.technologies || []))];
+    // Sources with evidence
+    const sourcesSet = new Set(matches.flatMap(item => item.sources || []));
+    if (matchingRepos.length > 0) sourcesSet.add('github');
+    if (matchingPortfolioProjects.length > 0) sourcesSet.add('portfolio');
+    if (domain === 'dsa' && ((leetcode.totalSolved || 0) > 0 || (gfg.totalProblemsSolved || 0) > 0)) {
+      if ((leetcode.totalSolved || 0) > 0) sourcesSet.add('leetcode');
+      if ((gfg.totalProblemsSolved || 0) > 0) sourcesSet.add('gfg');
+    }
+
+    const sources = [...sourcesSet];
+
+    // Build raw evidence details
+    const evidenceDetails = [];
+
+    // LeetCode / GFG details
+    if (domain === 'dsa' || domain === 'language') {
+      if (leetcode.totalSolved > 0) {
+        evidenceDetails.push({
+          source: 'leetcode',
+          detail: `${leetcode.totalSolved} solved problems (Easy: ${leetcode.easySolved || 0}, Medium: ${leetcode.mediumSolved || 0}, Hard: ${leetcode.hardSolved || 0})${leetcode.ranking ? `, Global rank: ${leetcode.ranking}` : ''}.`,
+          strength: leetcode.totalSolved >= 100 ? 'strong' : (leetcode.totalSolved >= 30 ? 'moderate' : 'weak')
+        });
+      }
+      if (gfg.totalProblemsSolved > 0) {
+        evidenceDetails.push({
+          source: 'gfg',
+          detail: `${gfg.totalProblemsSolved} problems solved on GeeksforGeeks (Coding score: ${gfg.codingScore || 0}).`,
+          strength: gfg.totalProblemsSolved >= 100 ? 'strong' : (gfg.totalProblemsSolved >= 30 ? 'moderate' : 'weak')
+        });
+      }
+    }
+
+    // GitHub details
+    if (matchingRepos.length > 0) {
       evidenceDetails.push({
         source: 'github',
-        detail: githubUnavailable
-          ? 'GitHub evidence was unavailable, so this claim cannot be verified from repositories.'
-          : `Not detected in ${githubProjects.length} analyzed GitHub repositories. Detected languages: ${detected.join(', ') || 'none reported'}.`,
+        detail: `Found in ${matchingRepos.length} repositor${matchingRepos.length === 1 ? 'y' : 'ies'}: ${matchingRepos.map(r => r.name).join(', ')}.`,
+        strength: matchingRepos.length >= 2 ? 'strong' : 'moderate'
+      });
+    } else if (matches.some(m => m.sources?.includes('github'))) {
+      const ghMatch = matches.find(m => m.sources?.includes('github'));
+      evidenceDetails.push({
+        source: 'github',
+        detail: ghMatch.evidence || `Detected ${skill} usage across GitHub codebase.`,
+        strength: ghMatch.strengthSignal || 'moderate'
+      });
+    }
+
+    // Portfolio details
+    if (matchingPortfolioProjects.length > 0) {
+      evidenceDetails.push({
+        source: 'portfolio',
+        detail: `Showcased in portfolio project${matchingPortfolioProjects.length > 1 ? 's' : ''}: ${matchingPortfolioProjects.map(p => p.name).join(', ')}.`,
+        strength: 'moderate'
+      });
+    } else if (matches.some(m => m.sources?.includes('portfolio'))) {
+      evidenceDetails.push({
+        source: 'portfolio',
+        detail: `Featured on personal portfolio website.`,
+        strength: 'moderate'
+      });
+    }
+
+    // Figma details
+    if (domain === 'design' && figma.extracted) {
+      evidenceDetails.push({
+        source: 'figma',
+        detail: `Verified in Figma workspace with ${(figma.projects || []).length} design project(s).`,
+        strength: (figma.projects || []).length > 0 ? 'strong' : 'moderate'
+      });
+    }
+
+    // LinkedIn details
+    if (matches.some(m => m.sources?.includes('linkedin'))) {
+      evidenceDetails.push({
+        source: 'linkedin',
+        detail: `Listed on verified LinkedIn profile.`,
         strength: 'weak'
       });
+    }
+
+    // Determine Status
+    let status = 'requires_proof';
+    if (domain === 'dsa') {
+      const totalCodingProblems = (leetcode.totalSolved || 0) + (gfg.totalProblemsSolved || 0);
+      if (totalCodingProblems >= 30 || matchingRepos.length > 0) {
+        status = 'verified';
+      } else if (totalCodingProblems > 0 || matchingResumeProjects.length > 0) {
+        status = 'partially_supported';
+      } else if (!leetcode.extracted && !gfg.extracted && !github.extracted) {
+        status = 'not_verifiable';
+      } else {
+        status = 'requires_proof';
+      }
+    } else if (domain === 'frontend' || domain === 'backend_system') {
+      if (matchingRepos.length > 0 || (matchingPortfolioProjects.length > 0 && sources.length >= 2)) {
+        status = 'verified';
+      } else if (matchingPortfolioProjects.length > 0 || matchingResumeProjects.length > 0 || matches.length > 0) {
+        status = 'partially_supported';
+      } else {
+        status = 'requires_proof';
+      }
+    } else if (domain === 'language') {
+      if (matchingRepos.length > 0 || (leetcode.languages || []).some(l => normalizeSkill(typeof l === 'string' ? l : (l?.language || l?.languageName || '')) === normalizeSkill(skill))) {
+        status = 'verified';
+      } else if (matches.length > 0 || matchingResumeProjects.length > 0) {
+        status = 'partially_supported';
+      } else {
+        status = 'requires_proof';
+      }
+    } else if (domain === 'design') {
+      if (figma.extracted || matchingPortfolioProjects.length > 0) {
+        status = 'verified';
+      } else if (matches.length > 0) {
+        status = 'partially_supported';
+      } else {
+        status = 'requires_proof';
+      }
+    } else if (domain === 'methodology') {
+      if (linkedin.extracted || (resume.experience || []).length > 0) {
+        status = 'verified';
+      } else {
+        status = 'partially_supported';
+      }
+    }
+
+    // Generate Candidate-Specific Personalized Explanation
+    let explanation = '';
+    if (domain === 'dsa') {
+      const leetcodeCount = leetcode.totalSolved || 0;
+      const gfgCount = gfg.totalProblemsSolved || 0;
+      if (leetcodeCount >= 30 && gfgCount > 0) {
+        explanation = `Your resume claims ${skill}, and your coding profiles provide strong direct evidence with ${leetcodeCount} solved problems on LeetCode and ${gfgCount} on GeeksforGeeks. That makes the claim well supported from a problem-solving perspective. GitHub does not need to contain a dedicated DSA repository for this claim.`;
+      } else if (leetcodeCount >= 30) {
+        explanation = `Your resume claims ${skill}, and your LeetCode profile provides strong direct evidence with ${leetcodeCount}+ solved problems (Easy: ${leetcode.easySolved || 0}, Medium: ${leetcode.mediumSolved || 0}, Hard: ${leetcode.hardSolved || 0}). That makes the claim well supported from a problem-solving perspective. GitHub does not need to contain a dedicated DSA repository for this claim.`;
+      } else if (gfgCount >= 30) {
+        explanation = `Your resume claims ${skill}, and your GeeksforGeeks profile confirms practical problem-solving with ${gfgCount} solved problems. The claim is well supported by competitive programming practice.`;
+      } else if (leetcodeCount > 0 || gfgCount > 0) {
+        explanation = `Your resume lists ${skill}, and your connected coding profiles show an initial foundation with ${leetcodeCount + gfgCount} solved problems. Solving more Medium-level problems will provide stronger proof for technical interviews.`;
+      } else {
+        explanation = `You list ${skill} on your resume, but your connected profiles currently lack observable coding activity on LeetCode or GeeksforGeeks. Linking your LeetCode profile with solved problems is the most effective way to verify this claim.`;
+      }
+    } else if (status === 'verified') {
+      if (matchingRepos.length > 0 && matchingPortfolioProjects.length > 0) {
+        explanation = `You list ${skill} on your resume, and it is actively demonstrated in your GitHub repository '${matchingRepos[0].name}' as well as showcased in your portfolio project '${matchingPortfolioProjects[0].name}'. The claim is well supported with hands-on project implementation.`;
+      } else if (matchingRepos.length > 0) {
+        explanation = `Your resume claims ${skill}, and your GitHub profile confirms real-world implementation across ${matchingRepos.length} repositor${matchingRepos.length === 1 ? 'y' : 'ies'} including '${matchingRepos[0].name}'. The claim is well supported by codebase evidence.`;
+      } else if (domain === 'design' && figma.extracted) {
+        explanation = `Your resume lists ${skill}, and your connected Figma workspace validates this with ${(figma.projects || []).length} active design project(s).`;
+      } else if (matchingPortfolioProjects.length > 0) {
+        explanation = `Your resume claims ${skill}, and your portfolio confirms project implementation in '${matchingPortfolioProjects[0].name}'.`;
+      } else {
+        explanation = `Your resume lists ${skill}, and verifiable evidence was observed across your connected ${sources.join(' and ')} profiles.`;
+      }
+    } else if (status === 'partially_supported') {
+      if (matchingResumeProjects.length > 0) {
+        explanation = `You list ${skill} in your resume and project descriptions (${matchingResumeProjects.map(p => p.name).join(', ')}), but the available GitHub and portfolio evidence does not yet show substantial hands-on ${skill} codebase artifacts. The claim is therefore currently supported in project context but needs stronger implementation evidence.`;
+      } else {
+        explanation = `You list ${skill} on your resume with preliminary mention, but connected repositories or portfolio projects show limited hands-on artifacts. Adding repository code or live deployments will fully verify this claim.`;
+      }
+    } else if (status === 'requires_proof') {
+      explanation = `You mention ${skill} on your resume, but the currently available GitHub, LeetCode, and portfolio data does not show observable ${skill} usage or artifacts. At this stage, CareerLens treats it as requiring proof rather than assuming the skill is absent.`;
+    } else {
+      explanation = `Your resume lists ${skill}. Because relevant verification platforms for this skill are not connected, it cannot be automatically verified from available digital artifacts.`;
     }
 
     return {
       skill,
       claimedIn: ['resume'],
-      evidenceIn: sources,
+      evidenceIn: sources.length ? sources : ['resume'],
       status,
+      explanation,
       evidenceDetails,
       proofRequested: status === 'requires_proof'
     };
   });
 }
 
+const CANONICAL_ALIASES = {
+  'reactjs': 'react',
+  'react': 'react',
+  'reactnative': 'reactnative',
+  'nextjs': 'nextjs',
+  'next': 'nextjs',
+  'vuejs': 'vue',
+  'vue': 'vue',
+  'nodejs': 'node',
+  'node': 'node',
+  'expressjs': 'express',
+  'express': 'express',
+  'nestjs': 'nest',
+  'nest': 'nest',
+  'postgresql': 'postgres',
+  'postgres': 'postgres',
+  'mongodb': 'mongo',
+  'mongo': 'mongo',
+  'dsa': 'dsa',
+  'datastructures': 'dsa',
+  'algorithms': 'dsa',
+  'datastructuresalgorithms': 'dsa',
+  'datastructuresandalgorithms': 'dsa',
+  'problemsolving': 'dsa',
+  'competitiveprogramming': 'dsa',
+  'tailwindcss': 'tailwind',
+  'tailwind': 'tailwind',
+  'javascript': 'javascript',
+  'js': 'javascript',
+  'typescript': 'typescript',
+  'ts': 'typescript',
+  'cpp': 'cpp',
+  'c++': 'cpp',
+  'cplusplus': 'cpp',
+  'c#': 'csharp',
+  'csharp': 'csharp',
+  'golang': 'go',
+  'go': 'go'
+};
+
 function normalizeSkill(skill) {
-  return String(skill || '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
+  const clean = String(skill || '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
+  return CANONICAL_ALIASES[clean] || clean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -495,10 +746,19 @@ function normalizeSkill(skill) {
 // ═══════════════════════════════════════════════════════════════
 
 function applyEvidenceAlignment(evaluation, evidence, extractedData) {
-  const missingGithub = (evidence.missingSources || []).includes('github') || !extractedData.github || extractedData.github.error;
-  const claims = buildClaimValidation(evidence).map(claim => missingGithub && claim.status === 'requires_proof'
-    ? { ...claim, status: 'not_verifiable', proofRequested: false }
-    : claim);
+  const claims = buildClaimValidation(evidence, extractedData).map(claim => {
+    // If AI provided a rich personalized explanation for this skill, merge it gracefully
+    const aiClaims = Array.isArray(evaluation.claimValidation) ? evaluation.claimValidation : [];
+    const aiClaim = aiClaims.find(ac => normalizeSkill(ac.skill || ac.claim) === normalizeSkill(claim.skill));
+    if (aiClaim && aiClaim.explanation && typeof aiClaim.explanation === 'string' && aiClaim.explanation.length > 25 && !aiClaim.explanation.includes('Not detected in 10')) {
+      return {
+        ...claim,
+        status: ['verified', 'partially_supported', 'requires_proof', 'not_verifiable'].includes(aiClaim.status) ? aiClaim.status : claim.status,
+        explanation: aiClaim.explanation
+      };
+    }
+    return claim;
+  });
 
   // Attach claim validation
   evaluation.claimValidation = claims;
@@ -522,16 +782,16 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     overall: overallScore,
     technicalSkills: {
       score: techScore,
-      explanation: `Evaluated ${claims.length} resume skills against extracted evidence. ${verifiedCount} verified, ${partialCount} weak, ${unsupportedCount} unsupported.`,
+      explanation: `Evaluated ${claims.length} resume skills across GitHub, LeetCode, Portfolio, and connected profiles. ${verifiedCount} verified, ${partialCount} weak, ${unsupportedCount} unsupported.`,
       details: {
-        awarded: `${verifiedCount} skills verified with code evidence.`,
-        reduced: `${unsupportedCount} skills claimed but not found in repositories.`,
-        improve: 'Add public repositories demonstrating unsupported skills.'
+        awarded: `${verifiedCount} skills verified with multi-source code and problem solving evidence.`,
+        reduced: `${unsupportedCount} skills claimed without observable artifacts.`,
+        improve: 'Demonstrate unsupported skills through projects or coding platform practice.'
       }
     },
     projectQuality: {
       score: projScore,
-      explanation: `Analyzed ${extractedData.github?.originalRepoCount || 0} original GitHub repositories.`,
+      explanation: `Analyzed ${extractedData.github?.originalRepoCount || 0} original GitHub repositories and connected project portfolios.`,
       details: {
         awarded: `${extractedData.github?.originalRepoCount || 0} original projects found.`,
         reduced: extractedData.github?.forkedRepoCount ? `${extractedData.github.forkedRepoCount} repos are forks.` : 'Limited project documentation.',
@@ -540,9 +800,9 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     },
     practicalImplementation: {
       score: Math.round((techScore + projScore) / 2),
-      explanation: 'Balance of claimed skills versus actual project implementations.',
+      explanation: 'Balance of claimed skills versus actual project implementations and coding artifacts.',
       details: {
-        awarded: 'Practical project work verified through GitHub.',
+        awarded: 'Practical project and coding work verified across connected sources.',
         reduced: 'Some claimed skills lack project-level evidence.',
         improve: 'Build end-to-end applications showcasing claimed technologies.'
       }
@@ -550,10 +810,12 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     codingActivity: {
       score: activityScore,
       explanation: extractedData.leetcode?.totalSolved
-        ? `LeetCode: ${extractedData.leetcode.totalSolved} solved. GitHub activity evaluated.`
-        : 'GitHub activity evaluated.',
+        ? `LeetCode: ${extractedData.leetcode.totalSolved} solved problems. GitHub activity evaluated.`
+        : (extractedData.gfg?.totalProblemsSolved
+          ? `GeeksforGeeks: ${extractedData.gfg.totalProblemsSolved} problems solved. GitHub activity evaluated.`
+          : 'GitHub and coding activity evaluated.'),
       details: {
-        awarded: 'Coding profile connected and activity detected.',
+        awarded: 'Coding profile connected and active problem solving detected.',
         reduced: 'Activity intensity could be more consistent.',
         improve: 'Maintain weekly commit streaks and regular problem solving.'
       }
@@ -569,7 +831,7 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     },
     crossSourceConsistency: {
       score: evidence.crossSourceConsistency?.consistencyScore || 0,
-      explanation: 'Compared resume claims with technologies observed in GitHub and other connected profiles.',
+      explanation: 'Compared resume claims with evidence observed across LeetCode, GitHub, Portfolio, and linked profiles.',
       details: {
         awarded: `${verifiedCount + partialCount} claims have supporting evidence.`,
         reduced: `${unsupportedCount} claims need stronger evidence.`,
@@ -602,7 +864,7 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     ]
   };
 
-  // Recommendations: map AI format to DB schema format
+  // Recommendations
   const aiRecs = ai.recommendations || [];
   const courses = Array.isArray(aiRecs)
     ? aiRecs.filter(r => r.type === 'course').map(r => ({ title: r.title, reason: r.reason, gap: r.reason }))
@@ -619,7 +881,7 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
 
   evaluation.recommendations = { courses, projects, improvements };
 
-  // Roadmap: map AI format to DB schema format
+  // Roadmap
   const aiRoadmap = ai.roadmap || [];
   const steps = Array.isArray(aiRoadmap)
     ? aiRoadmap.map(step => ({
@@ -644,20 +906,20 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
   evaluation.alreadyStrongIn = Array.isArray(ai.already_strong_in) && ai.already_strong_in.length > 0
     ? ai.already_strong_in
     : (Array.isArray(ai.alreadyStrongIn) ? ai.alreadyStrongIn : (ai.strengths || []));
-  evaluation.scoreExplanation = ai.scoreExplanation || `Readiness score of ${overallScore}/100 awarded based on verified repository evidence, problem solving consistency, and role alignment.`;
+  evaluation.scoreExplanation = ai.scoreExplanation || `Readiness score of ${overallScore}/100 awarded based on verified multi-source evidence, problem solving consistency, and role alignment.`;
   evaluation.nextBestAction = ai.nextBestAction || (steps[0]?.action ? `Immediate priority: ${steps[0].action}` : 'Publish an end-to-end full-stack repository on GitHub.');
 
   evaluation.personSpecificGaps = Array.isArray(ai.person_specific_gaps) && ai.person_specific_gaps.length > 0
     ? ai.person_specific_gaps
     : (Array.isArray(ai.personSpecificGaps) ? ai.personSpecificGaps : proofClaims.map(c => ({
         gap: `${c.skill} implementation evidence`,
-        why_it_matters_for_this_candidate: `Resume claims ${c.skill} but no public repository evidence was found to demonstrate production competence.`,
-        evidence_from_candidate: [`Claimed in ${c.evidenceIn?.join(', ') || 'resume'}, but 0 matching GitHub repos`],
+        why_it_matters_for_this_candidate: c.explanation || `Resume claims ${c.skill} but no observable artifacts were found to demonstrate competence.`,
+        evidence_from_candidate: [c.explanation || `Claimed on resume without connected artifacts`],
         target_role: evaluation.roleAnalysis.targetRole || 'Software Engineer',
         priority: 'high',
-        recommended_action: `Build and deploy an application utilizing ${c.skill}`,
-        expected_outcome: `Verified public repository proof for ${c.skill}`,
-        supporting_sources: ['resume', 'github'],
+        recommended_action: suggestedProofForClaim(c),
+        expected_outcome: `Verified evidence for ${c.skill}`,
+        supporting_sources: c.evidenceIn || ['resume'],
         validation_status: 'pending'
       })));
 
@@ -698,12 +960,13 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     : claims.map(c => ({
         claim: c.skill,
         source: (c.evidenceIn || [])[0] || 'resume',
-        evidenceText: (c.evidenceDetails || []).map(d => d.detail).join('; ') || 'None',
-        evidenceType: c.status === 'verified' ? 'observable_repo' : 'self_claimed',
+        evidenceText: c.explanation || (c.evidenceDetails || []).map(d => d.detail).join('; ') || 'None',
+        evidenceType: c.status === 'verified' ? (c.evidenceIn.includes('leetcode') ? 'coding_platform' : 'observable_repo') : 'self_claimed',
         validationStatus: c.status === 'verified' ? 'supported' : (c.status === 'partially_supported' ? 'weak' : 'pending'),
         strengthOfEvidence: c.status === 'verified' ? 'strong' : (c.status === 'partially_supported' ? 'moderate' : 'none'),
-        missingProof: c.status !== 'verified' ? `Provide a public repository with ${c.skill} code.` : ''
+        missingProof: c.status !== 'verified' ? suggestedProofForClaim(c) : ''
       }));
+
   evaluation.projectAnalysis = Array.isArray(ai.projectAnalysis) && ai.projectAnalysis.length > 0
     ? ai.projectAnalysis
     : (evidence.observedProjects || []).slice(0, 10).map(p => ({
@@ -715,22 +978,29 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
         roleRelevance: 'Aligned with software engineering practices',
         evidenceAvailable: p.url ? `URL: ${p.url}` : 'Repository code'
       }));
+
   evaluation.codingAnalysis = ai.codingAnalysis || {
     summary: extractedData.leetcode?.totalSolved
       ? `Demonstrated problem solving on LeetCode with ${extractedData.leetcode.totalSolved} solved problems.`
-      : 'Coding platform activity not connected or limited.',
-    problemCount: extractedData.leetcode?.totalSolved ? `${extractedData.leetcode.totalSolved} total (Easy: ${extractedData.leetcode.easySolved || 0}, Medium: ${extractedData.leetcode.mediumSolved || 0}, Hard: ${extractedData.leetcode.hardSolved || 0})` : '0',
+      : (extractedData.gfg?.totalProblemsSolved
+        ? `Demonstrated problem solving on GeeksforGeeks with ${extractedData.gfg.totalProblemsSolved} solved problems.`
+        : 'Coding platform activity not connected or limited.'),
+    problemCount: extractedData.leetcode?.totalSolved
+      ? `${extractedData.leetcode.totalSolved} total (Easy: ${extractedData.leetcode.easySolved || 0}, Medium: ${extractedData.leetcode.mediumSolved || 0}, Hard: ${extractedData.leetcode.hardSolved || 0})`
+      : (extractedData.gfg?.totalProblemsSolved ? `${extractedData.gfg.totalProblemsSolved} problems on GFG` : '0'),
     topicsCovered: (extractedData.leetcode?.topTags || []).map(t => t.tagName || t),
     languagesUsed: (extractedData.leetcode?.languages || []).map(l => l.languageName || l),
     consistency: extractedData.leetcode?.ranking ? `Global rank ${extractedData.leetcode.ranking}` : 'Moderate activity',
-    relationshipToClaimedSkills: 'Coding platform practice supports claimed algorithm fundamentals.'
+    relationshipToClaimedSkills: 'Coding platform practice supports claimed algorithm and problem-solving fundamentals.'
   };
+
   evaluation.crossSourceConsistencyData = ai.crossSourceConsistency || {
     consistentClaims: claims.filter(c => c.status === 'verified').map(c => c.skill),
-    repeatedEvidence: (evidence.crossSourceConsistency?.projectOverlap || []).map(p => `Project ${p} identified across resume and GitHub`),
+    repeatedEvidence: (evidence.crossSourceConsistency?.projectOverlap || []).map(p => `Project ${p} identified across resume and GitHub/portfolio`),
     conflictingInformation: [],
     unsupportedClaims: claims.filter(c => c.status === 'requires_proof').map(c => c.skill)
   };
+
   evaluation.bestFitRoles = Array.isArray(ai.bestFitRoles) && ai.bestFitRoles.length > 0
     ? ai.bestFitRoles
     : (evaluation.roleAnalysis.suggestedRoles || []);
@@ -740,8 +1010,8 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     .filter(claim => claim.proofRequested)
     .map(claim => ({
       skill: claim.skill,
-      reason: proofRequestReason(claim),
-      suggestedProof: `Share a relevant GitHub project or work sample demonstrating ${claim.skill}.`
+      reason: claim.explanation || proofRequestReason(claim),
+      suggestedProof: suggestedProofForClaim(claim)
     }));
 
   return evaluation;
@@ -752,9 +1022,10 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
 // ═══════════════════════════════════════════════════════════════
 
 function generateDeterministicEvaluation(evidence, targetRole, extractedData) {
-  const claims = buildClaimValidation(evidence);
+  const claims = buildClaimValidation(evidence, extractedData);
   const github = extractedData.github || {};
   const leetcode = extractedData.leetcode || {};
+  const gfg = extractedData.gfg || {};
 
   const verifiedCount = claims.filter(c => c.status === 'verified').length;
   const partialCount = claims.filter(c => c.status === 'partially_supported').length;
@@ -763,87 +1034,88 @@ function generateDeterministicEvaluation(evidence, targetRole, extractedData) {
 
   const techScore = Math.min(95, Math.round(((verifiedCount * 1.0 + partialCount * 0.5) / totalClaims) * 100));
   const projScore = github.originalRepoCount ? Math.min(90, 40 + github.originalRepoCount * 10) : 40;
-  const activityScore = leetcode?.totalSolved ? Math.min(95, 30 + Math.floor(leetcode.totalSolved / 5)) : (github.originalRepoCount ? 65 : 35);
+  const totalSolved = (leetcode.totalSolved || 0) + (gfg.totalProblemsSolved || 0);
+  const activityScore = totalSolved ? Math.min(95, 30 + Math.floor(totalSolved / 5)) : (github.originalRepoCount ? 65 : 35);
   const roleScore = targetRole ? 75 : 70;
   const overallScore = Math.round(techScore * 0.3 + projScore * 0.25 + activityScore * 0.2 + roleScore * 0.25);
 
   const proofClaims = claims.filter(c => c.proofRequested);
 
   return {
-    overallProfile: `Software engineering candidate targeting ${targetRole || 'Software Engineering'} roles with ${verifiedCount} verified skill claims and ${github.originalRepoCount || 0} original public repositories.`,
+    overallProfile: `Technical candidate targeting ${targetRole || 'Software Engineering'} roles with ${verifiedCount} verified skill claims across GitHub, LeetCode, and connected profiles.`,
     already_strong_in: claims.filter(c => c.status === 'verified').map(c => c.skill),
     jobReadinessScore: overallScore,
-    scoreExplanation: `Calculated readiness score of ${overallScore}/100 across verified repository evidence (${projScore}%), technical skills (${techScore}%), activity (${activityScore}%), and role alignment (${roleScore}%).`,
+    scoreExplanation: `Calculated readiness score of ${overallScore}/100 across verified multi-source evidence (${projScore}%), technical skills (${techScore}%), coding activity (${activityScore}%), and role alignment (${roleScore}%).`,
     scoreBreakdown: {
       technicalSkills: techScore,
       projectStrength: projScore,
       activity: activityScore,
       roleFit: roleScore
     },
-    strengths: claims.filter(c => c.status === 'verified').map(c => `${c.skill} verified with code evidence`).slice(0, 5),
+    strengths: claims.filter(c => c.status === 'verified').map(c => `${c.skill} verified with direct evidence`).slice(0, 5),
     gaps: proofClaims.map(c => `No evidence for ${c.skill}`).slice(0, 5),
     claimSummary: { verified: verifiedCount, weak: partialCount, unsupported: unsupportedCount },
     person_specific_gaps: proofClaims.slice(0, 4).map(c => ({
-      gap: `Missing ${c.skill} project evidence`,
-      why_it_matters_for_this_candidate: `Resume lists ${c.skill}, but no matching code was detected in public repositories for ${targetRole || 'Software Engineering'}.`,
-      evidence_from_candidate: [`Skill listed on resume, not found in GitHub`],
+      gap: `Missing ${c.skill} evidence`,
+      why_it_matters_for_this_candidate: c.explanation || `Resume lists ${c.skill}, but no matching artifacts were detected for ${targetRole || 'Software Engineering'}.`,
+      evidence_from_candidate: [c.explanation || `Skill listed on resume, not found in connected profiles`],
       target_role: targetRole || 'Software Engineer',
       priority: 'high',
-      recommended_action: `Build a production project demonstrating ${c.skill}`,
+      recommended_action: suggestedProofForClaim(c),
       expected_outcome: `Demonstrated competence in ${c.skill}`,
-      supporting_sources: ['resume', 'github'],
+      supporting_sources: c.evidenceIn || ['resume'],
       validation_status: 'pending'
     })),
     learning_recommendations: proofClaims.slice(0, 3).map(c => ({
       skill_gap: c.skill,
       current_level: 'intermediate',
-      learning_goal: `Master ${c.skill} and build an integrated project`,
-      why_this_resource: `Provides hands-on implementation patterns for ${c.skill}`,
-      search_query: `${c.skill} full project crash course tutorial`,
+      learning_goal: `Master ${c.skill} and demonstrate practical implementation`,
+      why_this_resource: `Provides hands-on patterns and practice for ${c.skill}`,
+      search_query: `${c.skill} full crash course tutorial`,
       resource_type: 'youtube_video',
       estimated_time: '2 hours',
       prerequisites: ['Basic programming fundamentals'],
-      completion_result: `Working project built with ${c.skill}`
+      completion_result: `Working artifacts built with ${c.skill}`
     })),
     roadmap_milestones: proofClaims.slice(0, 4).map((c, i) => ({
       phase: i + 1,
-      title: `Build & Deploy ${c.skill} Feature`,
+      title: `Build & Practice ${c.skill}`,
       goal: `Address missing ${c.skill} proof`,
       reason: `High priority gap for ${targetRole || 'Software Engineer'}`,
       tasks: [
         {
-          task: `Complete a practical ${c.skill} tutorial and build an API/component`,
-          description: `Learn core ${c.skill} design patterns`,
+          task: `Complete practical tutorial and exercises for ${c.skill}`,
+          description: `Learn core ${c.skill} patterns`,
           estimated_time: '2 hours',
           type: 'learn',
           completion_criteria: `Working prototype using ${c.skill}`
         },
         {
-          task: `Integrate ${c.skill} into existing GitHub repository`,
-          description: `Add features and deploy`,
+          task: suggestedProofForClaim(c),
+          description: `Provide verifiable evidence for ${c.skill}`,
           estimated_time: '3 hours',
           type: 'build',
-          completion_criteria: 'Public commit on GitHub with passing tests'
+          completion_criteria: 'Public artifacts or coding submissions'
         }
       ],
-      milestone: `Published ${c.skill} implementation`,
+      milestone: `Published ${c.skill} proof`,
       estimated_total_time: '5 hours',
-      completion_criteria: [`Deployed feature demonstrating ${c.skill}`, 'Updated documentation on GitHub']
+      completion_criteria: [`Demonstrated competence in ${c.skill}`, 'Updated profile with verified artifacts']
     })),
     final_learning_summary: {
       why_these_gaps_matter: `Addressing these ${proofClaims.length} missing skill areas will strengthen your role fit for ${targetRole || 'Software Engineer'}.`,
       what_to_learn: proofClaims.map(c => c.skill).join(', '),
       expected_improvement: `Directly improves technical skills and verified project evidence.`,
-      next_best_action: proofClaims[0] ? `Publish a production project showcasing ${proofClaims[0].skill}.` : 'Enhance test coverage and README documentation on current top repository.'
+      next_best_action: proofClaims[0] ? suggestedProofForClaim(proofClaims[0]) : 'Enhance test coverage and README documentation on current top repository.'
     },
     skillAnalysis: claims.map(c => ({
       claim: c.skill,
       source: (c.evidenceIn || [])[0] || 'resume',
-      evidenceText: (c.evidenceDetails || []).map(d => d.detail).join('; ') || 'None',
-      evidenceType: c.status === 'verified' ? 'observable_repo' : 'self_claimed',
+      evidenceText: c.explanation || (c.evidenceDetails || []).map(d => d.detail).join('; ') || 'None',
+      evidenceType: c.status === 'verified' ? (c.evidenceIn.includes('leetcode') ? 'coding_platform' : 'observable_repo') : 'self_claimed',
       validationStatus: c.status === 'verified' ? 'supported' : (c.status === 'partially_supported' ? 'weak' : 'pending'),
       strengthOfEvidence: c.status === 'verified' ? 'strong' : (c.status === 'partially_supported' ? 'moderate' : 'none'),
-      missingProof: c.status !== 'verified' ? `Provide a public repository with ${c.skill} code.` : ''
+      missingProof: c.status !== 'verified' ? suggestedProofForClaim(c) : ''
     })),
     projectAnalysis: (evidence.observedProjects || []).slice(0, 10).map(p => ({
       name: p.name,
@@ -855,12 +1127,16 @@ function generateDeterministicEvaluation(evidence, targetRole, extractedData) {
       evidenceAvailable: p.url ? `URL: ${p.url}` : 'Code repository'
     })),
     codingAnalysis: {
-      summary: leetcode.totalSolved ? `LeetCode problem solving with ${leetcode.totalSolved} solved problems.` : 'Coding activity not linked.',
-      problemCount: leetcode.totalSolved ? `${leetcode.totalSolved}` : '0',
+      summary: leetcode.totalSolved
+        ? `LeetCode problem solving with ${leetcode.totalSolved} solved problems.`
+        : (gfg.totalProblemsSolved
+          ? `GeeksforGeeks problem solving with ${gfg.totalProblemsSolved} solved problems.`
+          : 'Coding activity not linked.'),
+      problemCount: leetcode.totalSolved ? `${leetcode.totalSolved}` : (gfg.totalProblemsSolved ? `${gfg.totalProblemsSolved}` : '0'),
       topicsCovered: (leetcode.topTags || []).map(t => t.tagName || t),
       languagesUsed: (leetcode.languages || []).map(l => l.languageName || l),
       consistency: leetcode.ranking ? `Rank ${leetcode.ranking}` : 'Not available',
-      relationshipToClaimedSkills: 'Problem solving practice reinforces algorithm fundamentals.'
+      relationshipToClaimedSkills: 'Problem solving practice reinforces algorithm and data structure fundamentals.'
     },
     crossSourceConsistency: {
       consistentClaims: claims.filter(c => c.status === 'verified').map(c => c.skill),
@@ -869,24 +1145,24 @@ function generateDeterministicEvaluation(evidence, targetRole, extractedData) {
       unsupportedClaims: claims.filter(c => c.status === 'requires_proof').map(c => c.skill)
     },
     bestFitRoles: [
-      { role: targetRole || 'Full-Stack Engineer', fitScore: roleScore, whyFits: 'Strongest verified skill overlap with public repositories.' }
+      { role: targetRole || 'Full-Stack Engineer', fitScore: roleScore, whyFits: 'Strongest verified skill overlap across connected profiles.' }
     ],
     recommendations: proofClaims.map(c => ({
       type: 'project',
-      title: `Build a ${c.skill} project`,
-      reason: `Resume lists ${c.skill} but no GitHub evidence was found.`
+      title: `Demonstrate ${c.skill}`,
+      reason: c.explanation || `Resume lists ${c.skill} without observable evidence.`
     })),
     roadmap: proofClaims.map((c, i) => ({
       priority: i + 1,
-      action: `Publish a ${c.skill} project on GitHub`,
-      milestone: `Deploy and add meaningful commits demonstrating ${c.skill}.`
+      action: suggestedProofForClaim(c),
+      milestone: `Deploy and add verifiable proof for ${c.skill}.`
     })),
-    nextBestAction: proofClaims[0] ? `Publish a production project showcasing ${proofClaims[0].skill}.` : 'Enhance test coverage and README documentation on current top repository.',
+    nextBestAction: proofClaims[0] ? suggestedProofForClaim(proofClaims[0]) : 'Enhance test coverage and README documentation on current top repository.',
     roleAnalysis: {
       targetRole: targetRole || 'Software Engineer',
       roleFitScore: roleScore,
       strengths: claims.filter(c => c.status === 'verified').map(c => c.skill).slice(0, 4),
-      gaps: proofClaims.map(c => `${c.skill} project evidence`),
+      gaps: proofClaims.map(c => `${c.skill} evidence`),
       suggestedRoles: [
         { role: targetRole || 'Full-Stack Engineer', fitScore: roleScore, reason: 'Based on verified skills.' }
       ]
@@ -895,10 +1171,18 @@ function generateDeterministicEvaluation(evidence, targetRole, extractedData) {
 }
 
 function proofRequestReason(claim) {
-  const otherSources = (claim.evidenceIn || []).filter(source => source !== 'github');
-  return otherSources.length
-    ? `The resume lists ${claim.skill}; it appears in ${otherSources.join(', ')}, but no matching GitHub repository was found.`
-    : `The resume lists ${claim.skill}, but no matching GitHub repository was found.`;
+  return claim.explanation || `The resume lists ${claim.skill}, but no matching evidence was found across connected profiles.`;
+}
+
+function suggestedProofForClaim(claim) {
+  const domain = getSkillDomain(claim.skill);
+  if (domain === 'dsa') {
+    return 'Link a LeetCode or GeeksforGeeks profile with solved problem history.';
+  }
+  if (domain === 'design') {
+    return 'Share a Figma design workspace link or portfolio UI/UX showcase.';
+  }
+  return `Share a relevant GitHub project or work sample demonstrating ${claim.skill}.`;
 }
 
 module.exports = { evaluateStudent, generateDeterministicEvaluation, buildClaimValidation };

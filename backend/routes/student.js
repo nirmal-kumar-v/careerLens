@@ -303,7 +303,15 @@ function mapPgAnalysis(analysis) {
     sourceTexts: recs.sourceTexts || extracted.sourceTexts || {},
 
     createdAt: analysis.created_at,
-    updatedAt: analysis.updated_at
+    updatedAt: analysis.updated_at,
+
+    // Proof update metadata
+    previousScore: recs.previousScore || extracted.previousScore || null,
+    scoreChange: recs.scoreChange || extracted.scoreChange || null,
+    scoreChangeReason: recs.scoreChangeReason || extracted.scoreChangeReason || null,
+    updatedFromProof: recs.updatedFromProof || extracted.updatedFromProof || false,
+    latestProofUpdate: recs.latestProofUpdate || extracted.latestProofUpdate || null,
+    latestProof: recs.latestProof || extracted.latestProof || null
   };
 }
 

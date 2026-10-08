@@ -19,6 +19,10 @@ const { syncAnalysisToPg, syncProfileToPg, findInPg, listInPg } = require('../se
 const { getMongoStatus } = require('../config/mongodb');
 const { getPgStatus } = require('../config/postgresql');
 
+const { uploadProofFlexible } = require('../middleware/upload');
+const { extractFileProof, extractUrlProof } = require('../services/proofExtractor');
+const { reEvaluateWithProof } = require('../services/proofReEvaluator');
+
 const router = express.Router();
 
 router.use(authenticate);
@@ -375,6 +379,236 @@ router.post('/run', async (req, res) => {
     console.error('Analysis error:', err);
     res.status(500).json({ error: 'Analysis failed', details: err.message });
   }
+});
+
+/**
+ * Add claim-level proof, extract evidence, re-evaluate with AI, and update report.
+ */
+router.post('/add-proof', (req, res) => {
+  uploadProofFlexible(req, res, async (uploadErr) => {
+    if (uploadErr) {
+      return res.status(400).json({ error: uploadErr.message });
+    }
+
+    try {
+      const claim = req.body.claim || req.query.claim;
+      if (!claim || !claim.trim()) {
+        return res.status(400).json({ error: 'Claim name is required for proof submission' });
+      }
+
+      const rawUrl = req.body.url || req.body.sourceUrl || req.body.proofUrl || req.body.websiteUrl;
+      const uploadedFiles = req.files && req.files.length > 0
+        ? req.files
+        : (req.file ? [req.file] : []);
+
+      if (!rawUrl && uploadedFiles.length === 0) {
+        return res.status(400).json({ error: 'Please upload a proof file or provide a valid website URL' });
+      }
+
+      // 1. Fetch previous analysis (Postgres -> Mongo -> Memory)
+      let previousAnalysis = null;
+      let previousExtractedData = null;
+
+      if (getPgStatus()) {
+        const pgAnalyses = await listInPg('analyses', { student_id: req.user._id.toString() });
+        if (pgAnalyses && pgAnalyses.length > 0) {
+          const row = pgAnalyses[0];
+          const rawAnalysisData = row.analysis_data;
+          let parsedData = {};
+          if (typeof rawAnalysisData === 'string') {
+            try { parsedData = JSON.parse(rawAnalysisData); } catch (e) { parsedData = {}; }
+          } else if (rawAnalysisData && typeof rawAnalysisData === 'object') {
+            parsedData = rawAnalysisData;
+          }
+
+          let parsedClaims = [];
+          if (typeof row.claim_validation === 'string') {
+            try { parsedClaims = JSON.parse(row.claim_validation); } catch (e) { parsedClaims = []; }
+          } else if (Array.isArray(row.claim_validation)) {
+            parsedClaims = row.claim_validation;
+          }
+
+          let parsedScores = {};
+          if (typeof row.scores === 'string') {
+            try { parsedScores = JSON.parse(row.scores); } catch (e) { parsedScores = {}; }
+          } else if (row.scores && typeof row.scores === 'object') {
+            parsedScores = row.scores;
+          }
+
+          let parsedRole = {};
+          if (typeof row.role_analysis === 'string') {
+            try { parsedRole = JSON.parse(row.role_analysis); } catch (e) { parsedRole = {}; }
+          } else if (row.role_analysis && typeof row.role_analysis === 'object') {
+            parsedRole = row.role_analysis;
+          }
+
+          let parsedRecs = {};
+          if (typeof row.recommendations === 'string') {
+            try { parsedRecs = JSON.parse(row.recommendations); } catch (e) { parsedRecs = {}; }
+          } else if (row.recommendations && typeof row.recommendations === 'object') {
+            parsedRecs = row.recommendations;
+          }
+
+          previousExtractedData = parsedData;
+          previousAnalysis = {
+            _id: row.mongo_id || String(row.id),
+            studentId: row.student_id,
+            status: row.status,
+            extractedData: parsedData,
+            claimValidation: parsedClaims,
+            scores: parsedScores,
+            roleAnalysis: parsedRole,
+            recommendations: parsedRecs,
+            personSpecificGaps: parsedRecs.personSpecificGaps || parsedData.personSpecificGaps || [],
+            learningRecommendations: parsedRecs.learningRecommendations || parsedData.learningRecommendations || [],
+            roadmapMilestones: parsedRecs.roadmapMilestones || parsedData.roadmapMilestones || [],
+            finalLearningSummary: parsedRecs.finalLearningSummary || parsedData.finalLearningSummary || {},
+            overallProfile: parsedRecs.overallProfile || parsedData.overallProfile || '',
+            scoreExplanation: parsedRecs.scoreExplanation || parsedData.scoreExplanation || '',
+            strengths: parsedRole.strengths || [],
+            gaps: parsedRole.gaps || []
+          };
+        }
+      }
+
+      if (!previousAnalysis && getMongoStatus()) {
+        const mongoAnalysis = await Analysis.findOne({ studentId: req.user._id }).sort({ createdAt: -1 });
+        if (mongoAnalysis) {
+          previousAnalysis = typeof mongoAnalysis.toObject === 'function' ? mongoAnalysis.toObject() : mongoAnalysis;
+          previousExtractedData = previousAnalysis.extractedData || {};
+        }
+      }
+
+      if (!previousAnalysis) {
+        const memAnalysis = memoryAnalyses.find(a => a.studentId?.toString() === req.user._id?.toString());
+        if (memAnalysis) {
+          previousAnalysis = memAnalysis;
+          previousExtractedData = memAnalysis.extractedData || {};
+        }
+      }
+
+      if (!previousAnalysis) {
+        return res.status(400).json({ error: 'No previous analysis found. Please run an initial analysis first before adding proof.' });
+      }
+
+      // 2. Extract new proof items
+      const proofItems = [];
+
+      for (const file of uploadedFiles) {
+        try {
+          const fileProof = await extractFileProof(file, claim.trim());
+          proofItems.push(fileProof);
+        } catch (fileErr) {
+          console.warn('[AddProof] File extract warning:', fileErr.message);
+          return res.status(422).json({ error: `File extraction failed: ${fileErr.message}` });
+        }
+      }
+
+      if (rawUrl && rawUrl.trim()) {
+        try {
+          const urlProof = await extractUrlProof(rawUrl.trim(), claim.trim());
+          proofItems.push(urlProof);
+        } catch (urlErr) {
+          console.warn('[AddProof] URL extract warning:', urlErr.message);
+          return res.status(422).json({ error: `URL extraction failed: ${urlErr.message}` });
+        }
+      }
+
+      if (proofItems.length === 0) {
+        return res.status(422).json({ error: 'Could not extract readable proof content. Please check the file or URL provided.' });
+      }
+
+      // 3. Combine with original sources and preserve USER-PROVIDED PROOF separation
+      const updatedExtractedData = {
+        ...(previousExtractedData || {}),
+        userProvidedProofs: [
+          ...(Array.isArray(previousExtractedData?.userProvidedProofs) ? previousExtractedData.userProvidedProofs : []),
+          ...proofItems
+        ]
+      };
+
+      // 4. Fetch target role
+      let targetRole = previousAnalysis.roleAnalysis?.targetRole || 'Software Engineer';
+      if (getPgStatus()) {
+        const pgProfile = await findInPg('student_profiles', { user_id: req.user._id.toString() });
+        if (pgProfile?.target_role) targetRole = pgProfile.target_role;
+      }
+
+      // 5. Run AI Re-Evaluation with new proof
+      const latestProofItem = proofItems[proofItems.length - 1];
+      const reEvalResult = await reEvaluateWithProof(previousAnalysis, latestProofItem, targetRole, updatedExtractedData);
+
+      // 6. Construct updated analysis document preserving previous history
+      const updatedAnalysisFields = {
+        studentId: req.user._id,
+        status: 'complete',
+        extractedData: updatedExtractedData,
+        sourceTexts: reEvalResult.sourceTexts,
+        structuredEvidence: previousAnalysis.structuredEvidence || {},
+        claimValidation: reEvalResult.claimValidation,
+        scores: reEvalResult.scores,
+        roleAnalysis: {
+          ...(previousAnalysis.roleAnalysis || {}),
+          strengths: reEvalResult.strengths || previousAnalysis.roleAnalysis?.strengths || [],
+          gaps: reEvalResult.gaps || previousAnalysis.roleAnalysis?.gaps || []
+        },
+        recommendations: {
+          ...(previousAnalysis.recommendations || {}),
+          personSpecificGaps: reEvalResult.personSpecificGaps || [],
+          learningRecommendations: reEvalResult.learningRecommendations || [],
+          roadmapMilestones: reEvalResult.roadmapMilestones || [],
+          finalLearningSummary: reEvalResult.finalLearningSummary || {},
+          previousScore: reEvalResult.previous_score,
+          scoreChange: reEvalResult.score_change,
+          scoreChangeReason: reEvalResult.score_change_reason,
+          updatedFromProof: true,
+          latestProofUpdate: reEvalResult.updated_claim,
+          latestProof: latestProofItem
+        },
+        roadmap: previousAnalysis.roadmap || {},
+        overallProfile: reEvalResult.overallProfile || previousAnalysis.overallProfile,
+        scoreExplanation: reEvalResult.scoreExplanation || previousAnalysis.scoreExplanation,
+        personSpecificGaps: reEvalResult.personSpecificGaps || [],
+        learningRecommendations: reEvalResult.learningRecommendations || [],
+        roadmapMilestones: reEvalResult.roadmapMilestones || [],
+        finalLearningSummary: reEvalResult.finalLearningSummary || {},
+        previousScore: reEvalResult.previous_score,
+        scoreChange: reEvalResult.score_change,
+        scoreChangeReason: reEvalResult.score_change_reason,
+        updatedFromProof: true,
+        latestProofUpdate: reEvalResult.updated_claim,
+        latestProof: latestProofItem
+      };
+
+      const newAnalysisDoc = getMongoStatus()
+        ? new Analysis(updatedAnalysisFields)
+        : { _id: crypto.randomUUID(), ...updatedAnalysisFields, createdAt: new Date(), updatedAt: new Date() };
+
+      await syncAnalysisToPg(newAnalysisDoc);
+      if (getMongoStatus()) {
+        await newAnalysisDoc.save();
+      } else {
+        const idx = memoryAnalyses.findIndex(a => a.studentId?.toString() === req.user._id?.toString());
+        if (idx !== -1) memoryAnalyses[idx] = newAnalysisDoc;
+        else memoryAnalyses.push(newAnalysisDoc);
+        saveMemoryDb();
+      }
+
+      res.json({
+        message: 'Proof added and analysis updated successfully',
+        analysisId: newAnalysisDoc._id,
+        previous_score: reEvalResult.previous_score,
+        new_score: reEvalResult.new_score,
+        score_change: reEvalResult.score_change,
+        score_change_reason: reEvalResult.score_change_reason,
+        updated_claim: reEvalResult.updated_claim,
+        analysis: newAnalysisDoc
+      });
+    } catch (err) {
+      console.error('Proof submission and re-analysis error:', err);
+      res.status(500).json({ error: 'Failed to process proof and update analysis', details: err.message });
+    }
+  });
 });
 
 module.exports = router;

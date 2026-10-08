@@ -13,6 +13,7 @@ function normalizeAllSourceTexts(extractedData = {}) {
   const leetcodeText = buildLeetcodeSourceText(extractedData.leetcode);
   const portfolioText = buildPortfolioSourceText(extractedData.portfolio);
   const otherSourcesText = buildOtherSourcesText(extractedData);
+  const userProvidedProofText = buildUserProvidedProofText(extractedData.userProvidedProofs || extractedData.proofs);
 
   return {
     resumeText,
@@ -20,8 +21,26 @@ function normalizeAllSourceTexts(extractedData = {}) {
     linkedinText,
     leetcodeText,
     portfolioText,
-    otherSourcesText
+    otherSourcesText,
+    userProvidedProofText
   };
+}
+
+function buildUserProvidedProofText(proofs = []) {
+  if (!Array.isArray(proofs) || proofs.length === 0) {
+    return null;
+  }
+  const lines = ['===== USER-PROVIDED PROOF =====', ''];
+  proofs.forEach((p, idx) => {
+    lines.push(`PROOF ITEM #${idx + 1}`);
+    lines.push(`Target Claim: ${p.claim || 'Unspecified'}`);
+    lines.push(`Source Type: ${p.type === 'file' ? `File (${p.fileName || 'unknown'})` : `URL (${p.source_url || p.url || 'unknown'})`}`);
+    lines.push(`Validation Status: user_provided_evidence (validation_status: ${p.validation_status || 'pending'})`);
+    lines.push('Extracted Content:');
+    lines.push(p.extracted_text || p.content || 'No text extracted.');
+    lines.push('');
+  });
+  return lines.join('\n').trim();
 }
 
 function buildResumeSourceText(resume) {
@@ -626,6 +645,9 @@ function toCombinedPromptText(sourceTexts = {}, targetRole = '') {
   if (sourceTexts.otherSourcesText && !sourceTexts.otherSourcesText.includes('None.')) {
     parts.push(sourceTexts.otherSourcesText);
   }
+  if (sourceTexts.userProvidedProofText) {
+    parts.push(sourceTexts.userProvidedProofText);
+  }
 
   return parts.join('\n\n');
 }
@@ -645,5 +667,6 @@ module.exports = {
   buildLeetcodeSourceText,
   buildPortfolioSourceText,
   buildOtherSourcesText,
+  buildUserProvidedProofText,
   toCombinedPromptText
 };

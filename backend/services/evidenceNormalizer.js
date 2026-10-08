@@ -140,8 +140,9 @@ function normalizeEvidence(extractedData) {
 
   // ──── LEETCODE ────
   if (leetcode && leetcode.extracted) {
+    const totalSolved = leetcode.totalSolved || 0;
     evidence.codingEvidence.leetcode = {
-      totalSolved: leetcode.totalSolved || 0,
+      totalSolved,
       easySolved: leetcode.easySolved || 0,
       mediumSolved: leetcode.mediumSolved || 0,
       hardSolved: leetcode.hardSolved || 0,
@@ -149,6 +150,37 @@ function normalizeEvidence(extractedData) {
       languages: leetcode.languages || [],
       topTags: leetcode.topTags || []
     };
+
+    if (totalSolved > 0) {
+      const dsaStrength = totalSolved >= 150 ? 'strong' : (totalSolved >= 40 ? 'moderate' : 'weak');
+      const dsaTerms = [
+        'DSA', 'Data Structures', 'Algorithms', 'Data Structures & Algorithms',
+        'Data Structures and Algorithms', 'Problem Solving', 'Competitive Programming',
+        'LeetCode'
+      ];
+      dsaTerms.forEach(term => {
+        evidence.observedTechnologies.push({
+          tech: term,
+          sources: ['leetcode'],
+          evidence: `${totalSolved} problems solved on LeetCode (Easy: ${leetcode.easySolved || 0}, Medium: ${leetcode.mediumSolved || 0}, Hard: ${leetcode.hardSolved || 0})${leetcode.ranking ? `, Global Rank: ${leetcode.ranking}` : ''}`,
+          strengthSignal: dsaStrength
+        });
+      });
+
+      // Top topic tags on LeetCode
+      (leetcode.topTags || []).forEach(tag => {
+        const tagName = typeof tag === 'string' ? tag : (tag?.tagName || tag?.name || '');
+        if (tagName) {
+          evidence.observedTechnologies.push({
+            tech: tagName,
+            sources: ['leetcode'],
+            evidence: `Practiced topic on LeetCode: ${tagName} (${totalSolved} total problems solved)`,
+            strengthSignal: dsaStrength
+          });
+        }
+      });
+    }
+
     // Add languages as observed
     (leetcode.languages || []).forEach(l => {
       const langName = typeof l === 'string' ? l : (l?.language || l?.languageName || l?.name || '');
@@ -160,8 +192,8 @@ function normalizeEvidence(extractedData) {
         evidence.observedTechnologies.push({
           tech: langName,
           sources: ['leetcode'],
-          evidence: `Used in LeetCode problem solving`,
-          strengthSignal: 'moderate'
+          evidence: `Used in LeetCode problem solving (${totalSolved} problems)`,
+          strengthSignal: totalSolved > 50 ? 'strong' : 'moderate'
         });
       }
     });
@@ -171,11 +203,34 @@ function normalizeEvidence(extractedData) {
 
   // ──── GFG ────
   if (gfg && gfg.extracted) {
+    const totalSolved = gfg.totalProblemsSolved || 0;
     evidence.codingEvidence.gfg = {
-      totalProblemsSolved: gfg.totalProblemsSolved || 0,
+      totalProblemsSolved: totalSolved,
       codingScore: gfg.codingScore || 0,
       problemsByDifficulty: gfg.problemsByDifficulty || {}
     };
+    if (totalSolved > 0) {
+      const gfgStrength = totalSolved >= 150 ? 'strong' : (totalSolved >= 40 ? 'moderate' : 'weak');
+      const dsaTerms = [
+        'DSA', 'Data Structures', 'Algorithms', 'Data Structures & Algorithms',
+        'Data Structures and Algorithms', 'Problem Solving', 'Competitive Programming',
+        'GeeksforGeeks', 'GFG'
+      ];
+      dsaTerms.forEach(term => {
+        const existing = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === normalizeSkill(term));
+        if (existing) {
+          if (!existing.sources.includes('gfg')) existing.sources.push('gfg');
+          existing.evidence += `; ${totalSolved} problems solved on GeeksforGeeks`;
+        } else {
+          evidence.observedTechnologies.push({
+            tech: term,
+            sources: ['gfg'],
+            evidence: `${totalSolved} problems solved on GeeksforGeeks (Coding score: ${gfg.codingScore || 0})`,
+            strengthSignal: gfgStrength
+          });
+        }
+      });
+    }
   } else if (!gfg) {
     evidence.missingSources.push('gfg');
   }
@@ -184,8 +239,11 @@ function normalizeEvidence(extractedData) {
   if (linkedin && linkedin.extracted) {
     (linkedin.skills || []).forEach(s => {
       const existing = evidence.observedTechnologies.find(t => t.tech.toLowerCase() === s.toLowerCase());
-      if (existing) existing.sources.push('linkedin');
-      else evidence.observedTechnologies.push({ tech: s, sources: ['linkedin'], evidence: 'Listed on LinkedIn', strengthSignal: 'weak' });
+      if (existing) {
+        if (!existing.sources.includes('linkedin')) existing.sources.push('linkedin');
+      } else {
+        evidence.observedTechnologies.push({ tech: s, sources: ['linkedin'], evidence: 'Listed on LinkedIn profile', strengthSignal: 'weak' });
+      }
     });
     (linkedin.projects || []).forEach(p => {
       evidence.observedProjects.push({
@@ -212,6 +270,20 @@ function normalizeEvidence(extractedData) {
         isForked: false, ownershipConfidence: 'medium'
       });
     });
+    const figmaSkills = [...(figma.skills || []), ...(figma.tools || []), 'Figma', 'UI/UX', 'UI/UX Design'];
+    figmaSkills.forEach(s => {
+      const existing = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === normalizeSkill(s));
+      if (existing) {
+        if (!existing.sources.includes('figma')) existing.sources.push('figma');
+      } else {
+        evidence.observedTechnologies.push({
+          tech: s,
+          sources: ['figma'],
+          evidence: `Observed in Figma design workspace (${(figma.projects || []).length} projects)`,
+          strengthSignal: 'moderate'
+        });
+      }
+    });
     evidence.activityEvidence.figma = {
       designProjects: (figma.projects || []).length,
       skills: figma.skills || [],
@@ -231,7 +303,6 @@ function buildCrossSourceConsistency(evidence) {
   const consistency = {
     skillsClaimedAndObserved: [],
     skillsClaimedNotObserved: [],
-    skillsClaimedNotObservedOnGithub: [],
     skillsObservedNotClaimed: [],
     projectOverlap: [],
     consistencyScore: 0
@@ -239,15 +310,9 @@ function buildCrossSourceConsistency(evidence) {
 
   const claimedLower = uniqueSkills([...evidence.claimedSkills, ...evidence.claimedTechnologies]).map(normalizeSkill);
   const observedLower = evidence.observedTechnologies.map(t => normalizeSkill(t.tech));
-    const githubObservedLower = evidence.observedTechnologies
-      .filter(technology => technology.sources.includes('github'))
-      .map(technology => normalizeSkill(technology.tech));
 
-  // Skills claimed and observed
+  // Skills claimed and observed across any first-class source
   claimedLower.forEach(skill => {
-      if (!githubObservedLower.includes(skill)) {
-        consistency.skillsClaimedNotObservedOnGithub.push(skill);
-      }
     if (observedLower.includes(skill)) {
       const obs = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === skill);
       consistency.skillsClaimedAndObserved.push({
@@ -276,16 +341,57 @@ function buildCrossSourceConsistency(evidence) {
     }
   });
 
-  // Simple consistency score
+  // Consistency score across all connected sources
   const totalClaimed = claimedLower.length || 1;
-    const verified = claimedLower.filter(skill => githubObservedLower.includes(skill)).length;
-  consistency.consistencyScore = Math.round((verified / totalClaimed) * 100);
+  const verifiedCount = consistency.skillsClaimedAndObserved.length;
+  consistency.consistencyScore = Math.round((verifiedCount / totalClaimed) * 100);
 
   return consistency;
 }
 
+const CANONICAL_ALIASES = {
+  'reactjs': 'react',
+  'react': 'react',
+  'reactnative': 'reactnative',
+  'nextjs': 'nextjs',
+  'next': 'nextjs',
+  'vuejs': 'vue',
+  'vue': 'vue',
+  'nodejs': 'node',
+  'node': 'node',
+  'expressjs': 'express',
+  'express': 'express',
+  'nestjs': 'nest',
+  'nest': 'nest',
+  'postgresql': 'postgres',
+  'postgres': 'postgres',
+  'mongodb': 'mongo',
+  'mongo': 'mongo',
+  'dsa': 'dsa',
+  'datastructures': 'dsa',
+  'algorithms': 'dsa',
+  'datastructuresalgorithms': 'dsa',
+  'datastructuresandalgorithms': 'dsa',
+  'problemsolving': 'dsa',
+  'competitiveprogramming': 'dsa',
+  'tailwindcss': 'tailwind',
+  'tailwind': 'tailwind',
+  'javascript': 'javascript',
+  'js': 'javascript',
+  'typescript': 'typescript',
+  'ts': 'typescript',
+  'cpp': 'cpp',
+  'c++': 'cpp',
+  'cplusplus': 'cpp',
+  'c#': 'csharp',
+  'csharp': 'csharp',
+  'golang': 'go',
+  'go': 'go'
+};
+
 function normalizeSkill(skill) {
-  return String(skill || '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
+  const clean = String(skill || '').toLowerCase().replace(/[^a-z0-9+#]/g, '');
+  return CANONICAL_ALIASES[clean] || clean;
 }
 
 function uniqueSkills(skills) {
@@ -297,4 +403,4 @@ function uniqueSkills(skills) {
   return [...unique.values()];
 }
 
-module.exports = { normalizeEvidence };
+module.exports = { normalizeEvidence, normalizeSkill };
