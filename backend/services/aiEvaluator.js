@@ -661,7 +661,16 @@ function buildClaimValidation(evidence, extractedData = {}) {
         explanation = `You list ${skill} on your resume, but your connected profiles currently lack observable coding activity on LeetCode or GeeksforGeeks. Linking your LeetCode profile with solved problems is the most effective way to verify this claim.`;
       }
     } else if (status === 'verified') {
-      if (matchingRepos.length > 0 && matchingPortfolioProjects.length > 0) {
+      const firstRepo = matchingRepos[0];
+      if (firstRepo && firstRepo.isFork) {
+        if (firstRepo.integrity?.fork_classification === 'upstream_contributor') {
+          explanation = `Your resume claims ${skill}. Although repository '${firstRepo.name}' is forked from ${firstRepo.integrity.parent_repository?.name || 'upstream'}, CareerLens identified your direct commit/PR contributions in the upstream codebase, confirming genuine practical work.`;
+        } else if (firstRepo.integrity?.fork_classification === 'independent_modifications') {
+          explanation = `Your resume lists ${skill}, and although '${firstRepo.name}' is a fork, your account authored independent commits and modifications following the fork, providing meaningful code evidence.`;
+        } else {
+          explanation = `Your resume lists ${skill}, and evidence is linked in repository '${firstRepo.name}' (fork of ${firstRepo.integrity?.parent_repository?.name || 'upstream'}).`;
+        }
+      } else if (matchingRepos.length > 0 && matchingPortfolioProjects.length > 0) {
         explanation = `You list ${skill} on your resume, and it is actively demonstrated in your GitHub repository '${matchingRepos[0].name}' as well as showcased in your portfolio project '${matchingPortfolioProjects[0].name}'. The claim is well supported with hands-on project implementation.`;
       } else if (matchingRepos.length > 0) {
         explanation = `Your resume claims ${skill}, and your GitHub profile confirms real-world implementation across ${matchingRepos.length} repositor${matchingRepos.length === 1 ? 'y' : 'ies'} including '${matchingRepos[0].name}'. The claim is well supported by codebase evidence.`;
@@ -691,7 +700,9 @@ function buildClaimValidation(evidence, extractedData = {}) {
       status,
       explanation,
       evidenceDetails,
-      proofRequested: status === 'requires_proof'
+      proofRequested: status === 'requires_proof',
+      verification_status: 'pending',
+      identity_status: extractedData.integrityReport?.identity?.identity_status || 'medium_confidence'
     };
   });
 }

@@ -110,19 +110,25 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
           </div>
         )}
 
-        {/* Sources Tag List */}
-        {claim.evidenceIn && claim.evidenceIn.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginRight: 4, alignSelf: 'center' }}>
-              Sources:
-            </span>
-            {claim.evidenceIn.map(src => (
-              <span key={src} className="tag" style={{ fontSize: '0.72rem' }}>
-                {src === 'user_proof' ? 'User-Provided Proof' : src}
+        {/* Sources & Verification Status */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+          {claim.evidenceIn && claim.evidenceIn.length > 0 ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginRight: 4 }}>
+                Sources:
               </span>
-            ))}
-          </div>
-        )}
+              {claim.evidenceIn.map(src => (
+                <span key={src} className="tag" style={{ fontSize: '0.72rem' }}>
+                  {src === 'user_proof' ? 'User-Provided Proof' : src}
+                </span>
+              ))}
+            </div>
+          ) : <div />}
+
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+            Verification: Pending deeper ownership validation
+          </span>
+        </div>
       </div>
 
       {/* Modal */}

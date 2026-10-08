@@ -153,11 +153,11 @@ export default function StudentAnalysisView() {
           )}
 
           {tab === 'recommendations' && (
-            <PersonalizedLearningRoadmap analysis={analysis} />
+            <PersonalizedLearningRoadmap analysis={analysis} mode="recommendations" />
           )}
 
           {tab === 'roadmap' && (
-            <PersonalizedLearningRoadmap analysis={analysis} />
+            <PersonalizedLearningRoadmap analysis={analysis} mode="roadmap" />
           )}
         </>
       )}

@@ -22,6 +22,7 @@ const { getPgStatus } = require('../config/postgresql');
 const { uploadProofFlexible } = require('../middleware/upload');
 const { extractFileProof, extractUrlProof } = require('../services/proofExtractor');
 const { reEvaluateWithProof } = require('../services/proofReEvaluator');
+const { verifyAllEvidenceIntegrity } = require('../services/evidenceIntegrity');
 
 const router = express.Router();
 
@@ -324,6 +325,14 @@ router.post('/run', async (req, res) => {
           extracted.figma = { error: e.message };
         }
       }
+    }
+
+    // Evidence Integrity & Verification Layer
+    try {
+      const { integrityReport } = await verifyAllEvidenceIntegrity(extracted, profile.resumePath);
+      extracted.integrityReport = integrityReport;
+    } catch (integrityErr) {
+      console.warn('[Analysis] Evidence integrity check warning:', integrityErr.message);
     }
 
     // Normalization & Source-Specific Plain Text Separation

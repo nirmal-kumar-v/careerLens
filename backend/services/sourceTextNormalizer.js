@@ -9,6 +9,7 @@
 function normalizeAllSourceTexts(extractedData = {}) {
   const resumeText = buildResumeSourceText(extractedData.resume);
   const githubText = buildGithubSourceText(extractedData.github);
+  const evidenceIntegrityText = buildEvidenceIntegritySourceText(extractedData);
   const linkedinText = buildLinkedinSourceText(extractedData.linkedin);
   const leetcodeText = buildLeetcodeSourceText(extractedData.leetcode);
   const portfolioText = buildPortfolioSourceText(extractedData.portfolio);
@@ -18,6 +19,7 @@ function normalizeAllSourceTexts(extractedData = {}) {
   return {
     resumeText,
     githubText,
+    evidenceIntegrityText,
     linkedinText,
     leetcodeText,
     portfolioText,
@@ -186,8 +188,22 @@ function buildGithubSourceText(github) {
   if (repos.length) {
     repos.slice(0, 25).forEach(r => {
       const langs = Object.keys(r.languages || {}).join(', ');
-      const forkBadge = r.isFork ? ' [Fork]' : ' [Original]';
+      let forkBadge = ' [Original]';
+      if (r.isFork) {
+        if (r.integrity?.fork_classification === 'upstream_contributor') {
+          forkBadge = ` [Fork - Upstream Contributor (${r.integrity.upstream_contributions.length} upstream contributions in ${r.integrity.parent_repository?.name || 'upstream'})]`;
+        } else if (r.integrity?.fork_classification === 'independent_modifications') {
+          forkBadge = ` [Fork - Independent Modifications (${r.integrity.candidate_contributions?.length || 0} unique commits after fork of ${r.integrity.parent_repository?.name || 'upstream'})]`;
+        } else if (r.integrity?.fork_classification === 'limited_independent_evidence') {
+          forkBadge = ` [Fork - Limited Independent Changes (Forked from ${r.integrity.parent_repository?.name || 'upstream'})]`;
+        } else {
+          forkBadge = ` [Fork of ${r.integrity?.parent_repository?.name || 'upstream'}]`;
+        }
+      }
       lines.push(`- ${r.name}${forkBadge}${langs ? ` (${langs})` : ''}: ${r.description || 'No description'} [Stars: ${r.stargazersCount || 0}, Updated: ${r.pushedAt || 'unknown'}]`);
+      if (r.integrity?.personalized_explanation) {
+        lines.push(`  Contribution Context: ${r.integrity.personalized_explanation}`);
+      }
     });
   } else {
     lines.push('Not available');
@@ -631,6 +647,42 @@ Tools / Skills: ${(figma.tools || []).join(', ')}`);
   return sections.length ? sections.join('\n\n') : '===== OTHER SOURCES =====\nNone.';
 }
 
+function buildEvidenceIntegritySourceText(extractedData = {}) {
+  const rep = extractedData.integrityReport;
+  if (!rep) return '';
+
+  const lines = ['===== EVIDENCE INTEGRITY & REPOSITORY VERIFICATION =====', ''];
+  lines.push(`IDENTITY CONFIDENCE: ${rep.identity?.identity_status || 'medium_confidence'} (${Math.round((rep.identity?.confidence || 0.8) * 100)}%)`);
+  lines.push(`Identity Explanation: ${rep.identity?.personalized_explanation || 'Consistent multi-source naming.'}`);
+  if (rep.identity?.supporting_signals?.length) {
+    lines.push(`Supporting Identity Signals: ${rep.identity.supporting_signals.join('; ')}`);
+  }
+  if (rep.identity?.conflicting_signals?.length) {
+    lines.push(`Identity Ambiguities: ${rep.identity.conflicting_signals.join('; ')}`);
+  }
+  lines.push('');
+
+  lines.push(`GITHUB EVIDENCE INTEGRITY:`);
+  lines.push(`- Forks with upstream contributions: ${rep.github?.forksWithUpstreamContributions || 0}`);
+  lines.push(`- Forks with independent work: ${rep.github?.forksWithIndependentWork || 0}`);
+  lines.push(`- Verification Status: Pending deeper ownership validation`);
+  lines.push('');
+
+  lines.push(`DOCUMENT INTEGRITY:`);
+  lines.push(`- Visibility Status: ${rep.document?.visibility_status || 'visible'}`);
+  lines.push(`- Formatting Notes: ${rep.document?.personalized_explanation || 'Clean readable document structure.'}`);
+  if (rep.document?.integrity_notes?.length) {
+    lines.push(`- Specific Notes: ${rep.document.integrity_notes.join('; ')}`);
+  }
+  lines.push('');
+
+  lines.push(`CROSS-SOURCE CONSISTENCY:`);
+  lines.push(`- Status: ${rep.crossSource?.status || 'consistent'}`);
+  lines.push(`- Summary: ${rep.crossSource?.explanation || 'Cross-source evidence aligned.'}`);
+
+  return lines.join('\n');
+}
+
 function toCombinedPromptText(sourceTexts = {}, targetRole = '') {
   const parts = [];
 
@@ -639,6 +691,7 @@ function toCombinedPromptText(sourceTexts = {}, targetRole = '') {
 
   if (sourceTexts.resumeText) parts.push(sourceTexts.resumeText);
   if (sourceTexts.githubText) parts.push(sourceTexts.githubText);
+  if (sourceTexts.evidenceIntegrityText) parts.push(sourceTexts.evidenceIntegrityText);
   if (sourceTexts.linkedinText) parts.push(sourceTexts.linkedinText);
   if (sourceTexts.leetcodeText) parts.push(sourceTexts.leetcodeText);
   if (sourceTexts.portfolioText) parts.push(sourceTexts.portfolioText);
@@ -663,6 +716,7 @@ module.exports = {
   normalizeAllSourceTexts,
   buildResumeSourceText,
   buildGithubSourceText,
+  buildEvidenceIntegritySourceText,
   buildLinkedinSourceText,
   buildLeetcodeSourceText,
   buildPortfolioSourceText,

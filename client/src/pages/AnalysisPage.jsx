@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import { ScoreRing, ScoreBar } from '../components/ScoreComponents';
@@ -7,6 +7,7 @@ import { ClaimCard } from '../components/ClaimCard';
 import { LeetCodeBreakdown } from '../components/LeetCodeBreakdown';
 import { LinkedInBreakdown } from '../components/LinkedInBreakdown';
 import { PortfolioBreakdown } from '../components/PortfolioBreakdown';
+import { PersonalizedLearningRoadmap } from '../components/PersonalizedLearningRoadmap';
 import { Play, RefreshCw, BookOpen, FolderGit2, MapPin, Loader2, AlertCircle, ExternalLink, Sparkles } from 'lucide-react';
 
 const SCORE_LABELS = {
@@ -19,11 +20,36 @@ const SCORE_LABELS = {
   ownershipAuthenticity: 'Ownership & Authenticity',
 };
 
-export default function AnalysisPage() {
+export default function AnalysisPage({ initialTab }) {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  const getInitialTab = () => {
+    if (initialTab) return initialTab;
+    const tabParam = searchParams.get('tab');
+    if (tabParam) return tabParam;
+    if (location.pathname.includes('recommend')) return 'recommendations';
+    if (location.pathname.includes('roadmap')) return 'roadmap';
+    return 'overview';
+  };
+
   const [analysis, setAnalysis] = useState(null);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(getInitialTab);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      setActiveTab(tabParam);
+    } else if (location.pathname.includes('recommend')) {
+      setActiveTab('recommendations');
+    } else if (location.pathname.includes('roadmap')) {
+      setActiveTab('roadmap');
+    } else if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [location.pathname, searchParams, initialTab]);
 
   useEffect(() => {
     api.get('/student/analysis')
@@ -295,37 +321,117 @@ export default function AnalysisPage() {
                   })}
                 </div>
               </div>
+              {/* Identity & Evidence Integrity Summary */}
+              {analysis?.extractedData?.integrityReport?.identity && (
+                <div className="card" style={{ marginBottom: 18, background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={`badge ${analysis.extractedData.integrityReport.identity.identity_status === 'high_confidence' ? 'badge-verified' : 'badge-partial'}`} style={{ fontSize: '0.72rem' }}>
+                        Identity Linkage: {analysis.extractedData.integrityReport.identity.identity_status.replace('_', ' ')}
+                      </span>
+                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                        {Math.round((analysis.extractedData.integrityReport.identity.confidence || 0.8) * 100)}% confidence
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                      Verification: Pending deeper ownership validation
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.84rem', color: 'var(--text-primary)', lineHeight: 1.45 }}>
+                    {analysis.extractedData.integrityReport.identity.personalized_explanation}
+                  </div>
+                </div>
+              )}
+
               {repositories.length ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {repositories.map(repo => {
                     const languages = Object.keys(repo.languages || {});
                     const matchingClaims = claimedSkills.filter(skill => languages
                       .some(language => normalizeSkill(language) === normalizeSkill(skill)));
+                    const forkClassification = repo.integrity?.fork_classification;
+                    const parentRepo = repo.integrity?.parent_repository;
+
                     return (
-                      <article key={repo.url || repo.name} className="card" style={{ padding: '16px 20px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                      <article key={repo.url || repo.name} className="card" style={{ padding: '18px 20px', border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
                           <div>
-                            <a href={repo.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontWeight: 700 }}>
-                              {repo.name}<ExternalLink size={14} />
-                            </a>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '5px 0 10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                              <a href={repo.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontWeight: 700, fontSize: '1.02rem', color: 'var(--text-primary)' }}>
+                                {repo.name}<ExternalLink size={14} />
+                              </a>
+                              {parentRepo && (
+                                <a 
+                                  href={parentRepo.url || `https://github.com/${parentRepo.name}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  style={{ fontSize: '0.76rem', color: 'var(--cyan)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                                >
+                                  [View Upstream: {parentRepo.name}]
+                                </a>
+                              )}
+                            </div>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.83rem', margin: '5px 0 8px' }}>
                               {repo.description || 'No repository description provided.'}
                             </p>
                           </div>
-                          <span className={`badge ${repo.isFork ? 'badge-partial' : 'badge-verified'}`}>
-                            {repo.isFork ? 'Fork' : 'Original'}
-                          </span>
+
+                          <div>
+                            {repo.isFork ? (
+                              <span className={`badge ${forkClassification === 'upstream_contributor' ? 'badge-verified' : 'badge-partial'}`} style={{ fontSize: '0.74rem' }}>
+                                {forkClassification === 'upstream_contributor'
+                                  ? '✓ Fork · Upstream Contributor'
+                                  : forkClassification === 'independent_modifications'
+                                  ? '⚡ Fork · Independent Modifications'
+                                  : 'Fork'}
+                              </span>
+                            ) : (
+                              <span className="badge badge-verified" style={{ fontSize: '0.74rem' }}>
+                                Original
+                              </span>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Personalized Fork / Contribution explanation */}
+                        {repo.integrity?.personalized_explanation && (
+                          <div style={{
+                            fontSize: '0.82rem',
+                            color: 'var(--text-primary)',
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            padding: '8px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            borderLeft: repo.integrity?.fork_classification === 'upstream_contributor' ? '3px solid var(--green-light)' : '3px solid var(--accent)',
+                            margin: '8px 0 10px',
+                            lineHeight: 1.45
+                          }}>
+                            {repo.integrity.personalized_explanation}
+                          </div>
+                        )}
+
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
                           {languages.length
                             ? languages.map(language => <span key={language} className="tag">{language}</span>)
                             : <span className="tag">Language not detected</span>}
                           {repo.topics?.map(topic => <span key={topic} className="tag">{topic}</span>)}
                         </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          {repo.stargazersCount || 0} stars · Last updated {repo.pushedAt ? new Date(repo.pushedAt).toLocaleDateString() : 'unknown'}
+
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)', paddingTop: 8, marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                          <div>
+                            {repo.stargazersCount || 0} stars · Last updated {repo.pushedAt ? new Date(repo.pushedAt).toLocaleDateString() : 'unknown'}
+                            {repo.integrity?.commit_signals?.candidate_authored_commits > 0 && (
+                              <span> · {repo.integrity.commit_signals.candidate_authored_commits} candidate commit(s)</span>
+                            )}
+                            {repo.integrity?.upstream_contributions?.length > 0 && (
+                              <span style={{ color: 'var(--green-light)' }}> · {repo.integrity.upstream_contributions.length} upstream contribution(s)</span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                            Verification: Pending deeper ownership validation
+                          </span>
                         </div>
-                        <div style={{ marginTop: 8, fontSize: '0.82rem' }}>
+
+                        <div style={{ marginTop: 6, fontSize: '0.82rem' }}>
                           {matchingClaims.length
                             ? `Resume skills found here: ${matchingClaims.join(', ')}`
                             : 'No listed resume skill was detected in this repository.'}
@@ -462,12 +568,12 @@ export default function AnalysisPage() {
 
           {/* Recommendations Tab */}
           {activeTab === 'recommendations' && (
-            <PersonalizedLearningRoadmap analysis={analysis} />
+            <PersonalizedLearningRoadmap analysis={analysis} mode="recommendations" />
           )}
 
           {/* Roadmap Tab */}
           {activeTab === 'roadmap' && (
-            <PersonalizedLearningRoadmap analysis={analysis} />
+            <PersonalizedLearningRoadmap analysis={analysis} mode="roadmap" />
           )}
         </>
       )}

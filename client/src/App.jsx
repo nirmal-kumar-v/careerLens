@@ -49,6 +49,9 @@ export default function App() {
             <Route path="/dashboard" element={<StudentDashboard />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/analysis" element={<AnalysisPage />} />
+            <Route path="/recommendations" element={<AnalysisPage initialTab="recommendations" />} />
+            <Route path="/recommendation" element={<AnalysisPage initialTab="recommendations" />} />
+            <Route path="/roadmap" element={<AnalysisPage initialTab="roadmap" />} />
             <Route path="/proof" element={<ProofPage />} />
           </Route>
 
