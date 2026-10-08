@@ -79,14 +79,14 @@ export function PortfolioBreakdown({ data, url }) {
   return (
     <div className="anim-fade">
       {/* Header Profile Card */}
-      <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(92, 110, 248, 0.12) 0%, rgba(22, 26, 34, 0.95) 100%)', border: '1px solid rgba(92, 110, 248, 0.3)' }}>
+      <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(66, 114, 255, 0.1) 0%, rgba(22, 26, 34, 0.95) 100%)', border: '1px solid rgba(66, 234, 255, 0.24)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
             <div style={{ 
               width: 52, height: 52, borderRadius: 12, 
               background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%)', 
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(92, 110, 248, 0.4)'
+              boxShadow: '0 4px 16px rgba(66, 114, 255, 0.3)'
             }}>
               <Globe size={28} color="#ffffff" />
             </div>

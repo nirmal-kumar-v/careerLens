@@ -147,14 +147,14 @@ export function LinkedInBreakdown({ data, url, onPdfUploaded }) {
       )}
 
       {/* Header Profile Card */}
-      <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(10, 102, 194, 0.12) 0%, rgba(22, 26, 34, 0.9) 100%)', border: '1px solid rgba(10, 102, 194, 0.3)' }}>
+      <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(66, 234, 255, 0.08) 0%, rgba(22, 26, 34, 0.9) 100%)', border: '1px solid rgba(66, 234, 255, 0.22)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
             <div style={{ 
               width: 52, height: 52, borderRadius: 12, 
-              background: '#0a66c2', 
+              background: 'var(--horizon-blue)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(10, 102, 194, 0.4)'
+              boxShadow: '0 4px 16px rgba(66, 114, 255, 0.3)'
             }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="#ffffff">
                 <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>

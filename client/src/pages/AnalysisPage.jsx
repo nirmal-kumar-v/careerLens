@@ -142,7 +142,7 @@ export default function AnalysisPage({ initialTab }) {
       </div>
 
       {running && (
-        <div className="card" style={{ marginBottom: 28, background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(15, 18, 25, 0.98) 100%)', border: '1px solid rgba(99, 102, 241, 0.3)', textAlign: 'center', padding: '48px 24px' }}>
+        <div className="card" style={{ marginBottom: 28, background: 'linear-gradient(135deg, rgba(66, 114, 255, 0.1) 0%, rgba(15, 18, 25, 0.98) 100%)', border: '1px solid rgba(66, 234, 255, 0.25)', textAlign: 'center', padding: '48px 24px' }}>
           <div className="spinner" style={{ width: 44, height: 44, margin: '0 auto 20px', borderWidth: 3 }} />
           <h3 style={{ fontSize: '1.25rem', marginBottom: 8 }}>Synthesizing Candidate Evidence</h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: 520, margin: '0 auto', lineHeight: 1.5 }}>

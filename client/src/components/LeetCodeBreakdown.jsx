@@ -59,14 +59,14 @@ export function LeetCodeBreakdown({ data, url }) {
   return (
     <div className="anim-fade">
       {/* Header Profile Card */}
-      <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(22, 26, 34, 0.9) 100%)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+      <div className="card" style={{ marginBottom: 20, background: 'linear-gradient(135deg, rgba(255, 179, 67, 0.08) 0%, rgba(22, 26, 34, 0.9) 100%)', border: '1px solid rgba(255, 179, 67, 0.22)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ 
               width: 48, height: 48, borderRadius: 12, 
-              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', 
+              background: 'linear-gradient(135deg, var(--horizon-amber) 0%, var(--horizon-coral) 100%)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 16px rgba(245, 158, 11, 0.3)'
+              boxShadow: '0 4px 16px rgba(255, 179, 67, 0.24)'
             }}>
               <Code2 size={26} color="#ffffff" />
             </div>

@@ -4,18 +4,18 @@ export function ScoreRing({ score = 0, size = 148 }) {
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
 
-  const gradientId = `score-grad-${score >= 90 ? 'emerald' : score >= 75 ? 'green' : score >= 50 ? 'amber' : 'rose'}`;
+  const gradientId = `score-grad-${score >= 90 ? 'horizon-top' : score >= 75 ? 'horizon-cyan' : score >= 50 ? 'horizon-amber' : 'horizon-coral'}`;
   
   const colors = score >= 90
-    ? { start: '#10b981', end: '#06b6d4', text: '#34d399', glow: 'rgba(16, 185, 129, 0.35)' }
+    ? { start: '#4272FF', end: '#42EAFF', text: '#42EAFF', glow: 'rgba(66, 234, 255, 0.35)' }
     : score >= 75
-    ? { start: '#10b981', end: '#34d399', text: '#34d399', glow: 'rgba(52, 211, 153, 0.3)' }
+    ? { start: '#4272FF', end: '#42EAFF', text: '#42EAFF', glow: 'rgba(66, 114, 255, 0.24)' }
     : score >= 50
-    ? { start: '#f59e0b', end: '#fbbf24', text: '#fbbf24', glow: 'rgba(245, 158, 11, 0.3)' }
-    : { start: '#f43f5e', end: '#fb7185', text: '#f87171', glow: 'rgba(244, 63, 94, 0.3)' };
+    ? { start: '#FF7E42', end: '#FFB343', text: '#FFB343', glow: 'rgba(255, 179, 67, 0.3)' }
+    : { start: '#FF7E42', end: '#FFB343', text: '#FF7E42', glow: 'rgba(255, 126, 66, 0.22)' };
 
   return (
-    <div className="score-ring-wrap" style={{ width: size, height: size, filter: `drop-shadow(0 0 12px ${colors.glow})` }}>
+    <div className="score-ring-wrap" style={{ width: size, height: size, filter: `drop-shadow(0 0 16px ${colors.glow})` }}>
       <svg width={size} height={size}>
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
@@ -48,12 +48,12 @@ export function ScoreRing({ score = 0, size = 148 }) {
 
 export function ScoreBar({ label, score = 0, explanation }) {
   const colors = score >= 90
-    ? { bar: 'linear-gradient(90deg, #10b981 0%, #06b6d4 100%)', text: '#34d399' }
+    ? { bar: 'linear-gradient(90deg, #4272FF 0%, #42EAFF 100%)', text: '#42EAFF' }
     : score >= 75
-    ? { bar: 'linear-gradient(90deg, #059669 0%, #34d399 100%)', text: '#34d399' }
+    ? { bar: 'linear-gradient(90deg, #4272FF 0%, #42EAFF 100%)', text: '#42EAFF' }
     : score >= 50
-    ? { bar: 'linear-gradient(90deg, #d97706 0%, #fbbf24 100%)', text: '#fbbf24' }
-    : { bar: 'linear-gradient(90deg, #e11d48 0%, #fb7185 100%)', text: '#f87171' };
+    ? { bar: 'linear-gradient(90deg, #FF7E42 0%, #FFB343 100%)', text: '#FFB343' }
+    : { bar: 'linear-gradient(90deg, #FF7E42 0%, #FFB343 100%)', text: '#FF7E42' };
 
   return (
     <div className="progress-bar-wrap">

@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { TrendingDown, Users, BarChart3, AlertTriangle } from 'lucide-react';
 
-const COLORS = ['#5c6ef8', '#34d399', '#fbbf24', '#f87171', '#a78bfa'];
+const COLORS = ['#4272FF', '#42EAFF', '#FFB343', '#FF7E42'];
 
 export default function PlacementAnalyticsPage() {
   const [analytics, setAnalytics] = useState(null);
@@ -96,8 +96,8 @@ export default function PlacementAnalyticsPage() {
                       contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}
                       formatter={(val, name) => [`${val}%`, name === 'claimRate' ? 'Claimed' : 'Verified']}
                     />
-                    <Bar dataKey="claimRate" name="Claimed" fill="#5c6ef8" opacity={0.7} radius={[0,4,4,0]} />
-                    <Bar dataKey="verifyRate" name="Verified" fill="#34d399" opacity={0.85} radius={[0,4,4,0]} />
+                    <Bar dataKey="claimRate" name="Claimed" fill="#4272FF" opacity={0.78} radius={[0,4,4,0]} />
+                    <Bar dataKey="verifyRate" name="Verified" fill="#42EAFF" opacity={0.85} radius={[0,4,4,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -188,9 +188,9 @@ export default function PlacementAnalyticsPage() {
                         <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                         <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                         <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }} />
-                        <Bar dataKey="count" name="Students" fill="#5c6ef8" radius={[4,4,0,0]}>
+                        <Bar dataKey="count" name="Students" fill="#4272FF" radius={[4,4,0,0]}>
                           {scoreBuckets.map((b, i) => (
-                            <Cell key={i} fill={i >= 3 ? '#34d399' : i >= 2 ? '#fbbf24' : '#f87171'} />
+                            <Cell key={i} fill={i >= 3 ? '#42EAFF' : i >= 2 ? '#FFB343' : '#FF7E42'} />
                           ))}
                         </Bar>
                       </BarChart>

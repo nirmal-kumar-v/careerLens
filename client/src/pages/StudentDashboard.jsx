@@ -59,7 +59,7 @@ export default function StudentDashboard() {
       )}
 
       {/* Progress steps */}
-      <div className="card" style={{ marginBottom: 24, background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(20, 24, 36, 0.95) 100%)', border: '1px solid rgba(99, 102, 241, 0.25)' }}>
+      <div className="card" style={{ marginBottom: 24, background: 'linear-gradient(135deg, rgba(66, 114, 255, 0.08) 0%, rgba(20, 24, 36, 0.95) 100%)', border: '1px solid rgba(66, 234, 255, 0.22)' }}>
         <div className="card-header" style={{ marginBottom: 14 }}>
           <span className="card-title">Setup & Onboarding Milestones</span>
           <span className="badge badge-accent" style={{ fontSize: '0.75rem' }}>

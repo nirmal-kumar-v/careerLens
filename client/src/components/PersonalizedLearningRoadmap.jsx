@@ -245,7 +245,7 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
 
           {/* Score >= 90 Status Notification */}
           {isScoreAbove90 && !learningNeeded && (
-            <div className="card" style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.25)', textAlign: 'center', padding: '24px 20px' }}>
+            <div className="card" style={{ background: 'rgba(66, 234, 255, 0.06)', border: '1px solid rgba(66, 234, 255, 0.22)', textAlign: 'center', padding: '24px 20px' }}>
               <CheckCircle size={36} style={{ color: 'var(--green)', margin: '0 auto 12px' }} />
               <h3 style={{ margin: '0 0 8px', fontSize: '1.15rem', color: 'var(--text-primary)' }}>
                 No major course-level gap identified at your current readiness level.
@@ -391,7 +391,7 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
                                   width: 46,
                                   height: 46,
                                   borderRadius: '50%',
-                                  background: 'linear-gradient(135deg, var(--horizon-coral) 0%, #e11d48 100%)',
+                                  background: 'linear-gradient(135deg, var(--horizon-coral) 0%, var(--horizon-amber) 100%)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -566,8 +566,8 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
         <>
           {/* Roadmap Header with Estimated Readiness */}
           <div className="card" style={{ 
-            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(66, 234, 255, 0.04) 50%, var(--bg-card) 100%)', 
-            border: '1px solid rgba(34, 197, 94, 0.3)',
+            background: 'linear-gradient(135deg, rgba(66, 234, 255, 0.07) 0%, rgba(66, 114, 255, 0.05) 50%, var(--bg-card) 100%)',
+            border: '1px solid rgba(66, 234, 255, 0.24)',
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.45)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
