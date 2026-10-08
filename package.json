@@ -1,0 +1,14 @@
+{
+  "name": "careerlens",
+  "version": "1.0.0",
+  "description": "CareerLens — AI-Powered Employability Analyzer",
+  "scripts": {
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd client && npm run dev",
+    "install:all": "cd backend && npm install && cd ../client && npm install",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
