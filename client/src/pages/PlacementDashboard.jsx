@@ -40,10 +40,20 @@ export default function PlacementDashboard() {
         </div>
         <div className="stat-card">
           <div className="stat-label">Analysed</div>
-          <div className="stat-value" style={{ color: 'var(--accent-light)' }}>—</div>
+          <div className="stat-value" style={{ color: 'var(--accent-light)' }}>{stats?.analyzedCount ?? '—'}</div>
           <div className="stat-sub">with full reports</div>
         </div>
       </div>
+
+      {stats?.personalizedInsights && (
+        <div className="alert alert-info" style={{ marginBottom: 24, background: 'rgba(66, 114, 255, 0.08)', border: '1px solid rgba(66, 114, 255, 0.25)' }}>
+          <CheckCircle size={18} style={{ color: 'var(--horizon-cyan)', flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <strong style={{ color: 'var(--horizon-cyan)' }}>Institutional Cohort Intelligence: </strong>
+            <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>{stats.personalizedInsights}</span>
+          </div>
+        </div>
+      )}
 
       {/* Quick links */}
       <div className="grid-2">

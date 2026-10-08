@@ -44,7 +44,7 @@ export default function StudentAnalysisView() {
     </div>
   );
 
-  const { student, analysis } = data;
+  const { student, analysis, history = [], personalizedSummary = null } = data;
   const scores = analysis?.scores || {};
   const claims = analysis?.claimValidation || [];
   const role = analysis?.roleAnalysis || {};
@@ -63,6 +63,7 @@ export default function StudentAnalysisView() {
     { id: 'scores', label: 'Scores' },
     { id: 'recommendations', label: 'Recommendations' },
     { id: 'roadmap', label: 'Roadmap' },
+    ...(history.length > 0 ? [{ id: 'history', label: `Diagnostic History (${history.length})` }] : [])
   ];
 
   return (
@@ -74,6 +75,7 @@ export default function StudentAnalysisView() {
         <h1 className="page-title">{student.name}</h1>
         <p className="page-subtitle">
           {student.email}{student.regNo ? ` · ${student.regNo}` : ''}{student.targetRole ? ` · Target: ${student.targetRole}` : ''}
+          {student.approvedAt ? ` · Approved ${new Date(student.approvedAt).toLocaleDateString()}` : ''}
         </p>
       </div>
 
@@ -86,6 +88,34 @@ export default function StudentAnalysisView() {
         </div>
       ) : (
         <>
+          {/* Personalized Placement Summary Banner */}
+          {personalizedSummary && (
+            <div className="card anim-fade" style={{
+              marginBottom: 20,
+              background: 'linear-gradient(135deg, rgba(66, 114, 255, 0.12) 0%, rgba(14, 17, 24, 0.95) 100%)',
+              border: '1px solid rgba(66, 114, 255, 0.35)',
+              padding: '18px 20px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--horizon-cyan)' }}>
+                  Placement Cell Diagnostic Assessment
+                </div>
+                <span className={`badge ${personalizedSummary.readiness >= 70 ? 'badge-verified' : 'badge-partial'}`}>
+                  Readiness: {personalizedSummary.readiness}/100
+                </span>
+              </div>
+              <p style={{ margin: '0 0 10px', fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: 1.5 }}>
+                {personalizedSummary.recommendationNote}
+              </p>
+              {personalizedSummary.nextAction && (
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  <strong style={{ color: 'var(--horizon-cyan)' }}>Recommended Next Action: </strong>
+                  {personalizedSummary.nextAction}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="tabs">
             {tabs.map(t => (
               <div key={t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
@@ -158,6 +188,51 @@ export default function StudentAnalysisView() {
 
           {tab === 'roadmap' && (
             <PersonalizedLearningRoadmap analysis={analysis} mode="roadmap" />
+          )}
+
+          {tab === 'history' && (
+            <div className="anim-fade card">
+              <div className="card-title" style={{ marginBottom: 18 }}>Historical Diagnostics & Score Timeline</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {history.map((h, hIdx) => (
+                  <div key={h.id || hIdx} style={{
+                    background: 'var(--bg-surface)',
+                    padding: '16px 18px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                          Evaluation {history.length - hIdx} · Score: {h.score}/100
+                        </span>
+                        {h.updatedFromProof && (
+                          <span className="badge badge-verified" style={{ fontSize: '0.72rem' }}>
+                            Updated from Proof
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {new Date(h.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+                      <strong>Target Role: </strong>{h.targetRole} · {h.verifiedCount} verified skills · {h.unsupportedCount} evidence gaps
+                    </div>
+
+                    {h.scoreChangeReason && (
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-primary)', background: 'var(--bg-card)', padding: '8px 12px', borderRadius: 6 }}>
+                        <strong>Diagnostic Signal: </strong>{h.scoreChangeReason}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </>
       )}

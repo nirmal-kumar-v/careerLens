@@ -6,49 +6,173 @@ const User = require('../models/User');
 const { findInPg, listInPg, syncProfileToPg, updateInPg } = require('../services/dbService');
 const { getPgStatus } = require('../config/postgresql');
 const { getMongoStatus } = require('../config/mongodb');
+const { memoryUsers, memoryProfiles, memoryAnalyses, saveMemoryDb } = require('../services/userStore');
 
 const router = express.Router();
 
 router.use(authenticate);
 router.use(authorize('placement'));
 
+/**
+ * Helper: Check if a student user/profile belongs to the logged-in placement cell
+ */
+function studentMatchesPlacementCell(user, profile, placementOfficer) {
+  if (!user && !profile) return false;
+
+  const officerId = placementOfficer._id?.toString();
+  const officerInstCode = (placementOfficer.institutionCode || '').trim().toLowerCase();
+  const officerInstName = (placementOfficer.institutionName || '').trim().toLowerCase();
+  const officerDomain = (placementOfficer.email || '').split('@')[1]?.toLowerCase();
+
+  // 1. Direct placementCellId match
+  const profileCellId = (profile?.placementCellId || profile?.placement_cell_id)?.toString();
+  if (profileCellId && officerId && profileCellId === officerId) {
+    return true;
+  }
+
+  // 2. Email domain match (e.g. @kongu.edu)
+  const studentEmail = (user?.email || '').toLowerCase();
+  const studentDomain = studentEmail.split('@')[1];
+  if (officerDomain && studentDomain && officerDomain === studentDomain && officerDomain !== 'gmail.com' && officerDomain !== 'outlook.com' && officerDomain !== 'yahoo.com') {
+    return true;
+  }
+
+  // 3. Institution code match (e.g. KEC)
+  const userInstCode = (user?.institutionCode || user?.institution || '').trim().toLowerCase();
+  if (officerInstCode && userInstCode && (officerInstCode === userInstCode || userInstCode.includes(officerInstCode) || officerInstCode.includes(userInstCode))) {
+    return true;
+  }
+
+  // 4. Institution name match (e.g. Kongu Engineering College)
+  const userInstName = (user?.institutionName || user?.institution || '').trim().toLowerCase();
+  if (officerInstName && userInstName && (officerInstName === userInstName || userInstName.includes(officerInstName) || officerInstName.includes(userInstName))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Helper: Fetch all student records (user + profile + analysis) belonging to this placement cell
+ */
+async function getInstitutionStudents(placementOfficer) {
+  const officerId = placementOfficer._id?.toString();
+  const studentMap = new Map();
+
+  // 1. Query PostgreSQL if active
+  if (getPgStatus()) {
+    try {
+      const pgProfiles = await listInPg('student_profiles') || [];
+      const pgUsers = await listInPg('users', { role: 'student' }) || [];
+      const pgAnalyses = await listInPg('analyses') || [];
+
+      for (const p of pgProfiles) {
+        const u = pgUsers.find(user => user.mongo_id === p.user_id || user.id?.toString() === p.user_id?.toString());
+        if (studentMatchesPlacementCell(u, p, placementOfficer)) {
+          const studentId = (u?.mongo_id || u?.id || p.user_id).toString();
+          const userAnalyses = pgAnalyses.filter(a => a.student_id === studentId && a.status === 'complete');
+          studentMap.set(studentId, {
+            id: studentId,
+            name: u?.name || 'Student',
+            email: u?.email || '',
+            regNo: u?.reg_no || '',
+            targetRole: p.target_role || '',
+            githubUrl: p.github_url || '',
+            approvalStatus: p.approval_status || 'pending',
+            profileComplete: Boolean(p.resume_path && p.github_url),
+            approvedAt: p.approved_at || null,
+            createdAt: u?.created_at || p.created_at || null,
+            analyses: userAnalyses.map(mapPgAnalysis)
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Placement] PG query warning:', e.message);
+    }
+  }
+
+  // 2. Query MongoDB if active
+  if (getMongoStatus()) {
+    try {
+      const mongoProfiles = await StudentProfile.find().populate('userId', 'name email regNo institutionName institutionCode createdAt');
+      const studentIds = mongoProfiles.map(p => p.userId?._id).filter(Boolean);
+      const mongoAnalyses = await Analysis.find({ studentId: { $in: studentIds } }).sort({ createdAt: -1 });
+
+      for (const p of mongoProfiles) {
+        const u = p.userId;
+        if (u && studentMatchesPlacementCell(u, p, placementOfficer)) {
+          const studentId = u._id.toString();
+          const userAnalyses = mongoAnalyses.filter(a => a.studentId?.toString() === studentId);
+          studentMap.set(studentId, {
+            id: studentId,
+            name: u.name,
+            email: u.email,
+            regNo: u.regNo || '',
+            targetRole: p.targetRole || '',
+            githubUrl: p.githubUrl || '',
+            approvalStatus: p.approvalStatus || 'pending',
+            profileComplete: Boolean(p.resumePath && p.githubUrl),
+            approvedAt: p.approvedAt || null,
+            createdAt: u.createdAt || p.updatedAt,
+            analyses: userAnalyses
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[Placement] Mongo query warning:', e.message);
+    }
+  }
+
+  // 3. Fallback / Synchronize with Memory Store
+  for (const p of memoryProfiles) {
+    const u = memoryUsers.find(user => user._id?.toString() === p.userId?.toString() && user.role === 'student');
+    if (u && studentMatchesPlacementCell(u, p, placementOfficer)) {
+      const studentId = u._id.toString();
+      const userAnalyses = memoryAnalyses.filter(a => a.studentId?.toString() === studentId && (a.status === 'complete' || a.scores));
+      if (!studentMap.has(studentId)) {
+        studentMap.set(studentId, {
+          id: studentId,
+          name: u.name,
+          email: u.email,
+          regNo: u.regNo || '',
+          targetRole: p.targetRole || '',
+          githubUrl: p.githubUrl || '',
+          approvalStatus: p.approvalStatus || 'pending',
+          profileComplete: Boolean(p.resumePath && p.githubUrl),
+          approvedAt: p.approvedAt || null,
+          createdAt: u.createdAt || new Date(),
+          analyses: userAnalyses
+        });
+      }
+    }
+  }
+
+  return Array.from(studentMap.values());
+}
+
 // Get all students linked to this placement cell
 router.get('/students', async (req, res) => {
   try {
-    if (getPgStatus()) {
-      const pgProfiles = await listInPg('student_profiles', { placement_cell_id: req.user._id.toString() });
-      if (pgProfiles?.length) {
-        const students = await Promise.all(pgProfiles.map(async profile => {
-          const user = await findInPg('users', { mongo_id: profile.user_id });
-          return user ? {
-            id: user.mongo_id,
-            name: user.name,
-            email: user.email,
-            regNo: user.reg_no,
-            approvalStatus: profile.approval_status,
-            profileComplete: Boolean(profile.resume_path && profile.github_url),
-            targetRole: profile.target_role
-          } : null;
-        }));
-        return res.json(students.filter(Boolean));
-      }
-    }
-    if (!getMongoStatus()) return res.json([]);
-    const profiles = await StudentProfile.find({ placementCellId: req.user._id })
-      .populate('userId', 'name email regNo');
-
-    const students = profiles.map(p => ({
-      id: p.userId._id,
-      name: p.userId.name,
-      email: p.userId.email,
-      regNo: p.userId.regNo,
-      approvalStatus: p.approvalStatus,
-      profileComplete: p.profileComplete,
-      targetRole: p.targetRole
-    }));
-
-    res.json(students);
+    const students = await getInstitutionStudents(req.user);
+    const payload = students.map(s => {
+      const latestAnalysis = s.analyses?.[0] || null;
+      return {
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        regNo: s.regNo,
+        targetRole: s.targetRole || latestAnalysis?.roleAnalysis?.targetRole || 'Not specified',
+        approvalStatus: s.approvalStatus,
+        profileComplete: s.profileComplete,
+        latestScore: latestAnalysis?.scores?.overall || latestAnalysis?.jobReadinessScore || null,
+        analysisCount: s.analyses?.length || 0,
+        approvedAt: s.approvedAt,
+        createdAt: s.createdAt
+      };
+    });
+    res.json(payload);
   } catch (err) {
+    console.error('Failed to fetch students:', err);
     res.status(500).json({ error: 'Failed to fetch students' });
   }
 });
@@ -56,36 +180,66 @@ router.get('/students', async (req, res) => {
 // Approve a student
 router.post('/approve/:studentId', async (req, res) => {
   try {
+    const studentId = req.params.studentId;
+    const now = new Date();
+    let updated = false;
+
+    // 1. Update PG
     if (getPgStatus()) {
-      const pgProfile = await findInPg('student_profiles', { user_id: req.params.studentId });
-      if (pgProfile && pgProfile.placement_cell_id === req.user._id.toString()) {
-        await updateInPg('student_profiles', { user_id: req.params.studentId }, { approval_status: 'approved' });
-        if (getMongoStatus()) {
-          const mongoProfile = await StudentProfile.findOne({ userId: req.params.studentId, placementCellId: req.user._id });
-          if (mongoProfile) {
-            mongoProfile.approvalStatus = 'approved';
-            await mongoProfile.save();
-          }
+      try {
+        await updateInPg('student_profiles', { user_id: studentId }, {
+          approval_status: 'approved',
+          placement_cell_id: req.user._id.toString(),
+          approved_at: now
+        });
+        updated = true;
+      } catch (e) {}
+    }
+
+    // 2. Update Mongo
+    if (getMongoStatus()) {
+      try {
+        let profile = await StudentProfile.findOne({ userId: studentId });
+        if (profile) {
+          profile.approvalStatus = 'approved';
+          profile.placementCellId = req.user._id;
+          profile.approvedAt = now;
+          await profile.save();
+          updated = true;
         }
-        return res.json({ message: 'Student approved', approvalStatus: 'approved' });
-      }
+      } catch (e) {}
     }
-    if (!getMongoStatus()) return res.status(404).json({ error: 'Student not found' });
-    const profile = await StudentProfile.findOne({
-      userId: req.params.studentId,
-      placementCellId: req.user._id
+
+    // 3. Update Memory Store
+    const memProfile = memoryProfiles.find(p => p.userId?.toString() === studentId.toString());
+    if (memProfile) {
+      memProfile.approvalStatus = 'approved';
+      memProfile.placementCellId = req.user._id.toString();
+      memProfile.approvedAt = now;
+      saveMemoryDb();
+      updated = true;
+    }
+
+    if (!updated) {
+      // Create profile record if missing
+      memoryProfiles.push({
+        _id: 'prof_' + Date.now(),
+        userId: studentId,
+        placementCellId: req.user._id.toString(),
+        approvalStatus: 'approved',
+        approvedAt: now
+      });
+      saveMemoryDb();
+    }
+
+    res.json({
+      message: 'Student approved successfully',
+      approvalStatus: 'approved',
+      studentId,
+      approvedAt: now
     });
-
-    if (!profile) {
-      return res.status(404).json({ error: 'Student not found or not linked to your placement cell' });
-    }
-
-    profile.approvalStatus = 'approved';
-    await syncProfileToPg(profile);
-    await profile.save();
-
-    res.json({ message: 'Student approved', approvalStatus: 'approved' });
   } catch (err) {
+    console.error('Failed to approve student:', err);
     res.status(500).json({ error: 'Failed to approve student' });
   }
 });
@@ -93,202 +247,118 @@ router.post('/approve/:studentId', async (req, res) => {
 // Reject a student
 router.post('/reject/:studentId', async (req, res) => {
   try {
+    const studentId = req.params.studentId;
+    const now = new Date();
+
     if (getPgStatus()) {
-      const pgProfile = await findInPg('student_profiles', { user_id: req.params.studentId });
-      if (pgProfile && pgProfile.placement_cell_id === req.user._id.toString()) {
-        await updateInPg('student_profiles', { user_id: req.params.studentId }, { approval_status: 'rejected' });
-        if (getMongoStatus()) {
-          const mongoProfile = await StudentProfile.findOne({ userId: req.params.studentId, placementCellId: req.user._id });
-          if (mongoProfile) {
-            mongoProfile.approvalStatus = 'rejected';
-            await mongoProfile.save();
-          }
+      try {
+        await updateInPg('student_profiles', { user_id: studentId }, {
+          approval_status: 'rejected',
+          placement_cell_id: req.user._id.toString()
+        });
+      } catch (e) {}
+    }
+
+    if (getMongoStatus()) {
+      try {
+        let profile = await StudentProfile.findOne({ userId: studentId });
+        if (profile) {
+          profile.approvalStatus = 'rejected';
+          await profile.save();
         }
-        return res.json({ message: 'Student rejected', approvalStatus: 'rejected' });
-      }
-    }
-    if (!getMongoStatus()) return res.status(404).json({ error: 'Student not found' });
-    const profile = await StudentProfile.findOne({
-      userId: req.params.studentId,
-      placementCellId: req.user._id
-    });
-
-    if (!profile) {
-      return res.status(404).json({ error: 'Student not found' });
+      } catch (e) {}
     }
 
-    profile.approvalStatus = 'rejected';
-    await syncProfileToPg(profile);
-    await profile.save();
+    const memProfile = memoryProfiles.find(p => p.userId?.toString() === studentId.toString());
+    if (memProfile) {
+      memProfile.approvalStatus = 'rejected';
+      saveMemoryDb();
+    }
 
-    res.json({ message: 'Student rejected', approvalStatus: 'rejected' });
+    res.json({ message: 'Student rejected', approvalStatus: 'rejected', studentId });
   } catch (err) {
+    console.error('Failed to reject student:', err);
     res.status(500).json({ error: 'Failed to reject student' });
   }
 });
 
-// View approved student's analysis (ONLY approved students)
+// View approved student's analysis & past history
 router.get('/student-analysis/:studentId', async (req, res) => {
   try {
-    if (getPgStatus()) {
-      const pgProfile = await findInPg('student_profiles', { user_id: req.params.studentId });
-      if (pgProfile && pgProfile.placement_cell_id === req.user._id.toString() && pgProfile.approval_status === 'approved') {
-        const user = await findInPg('users', { mongo_id: req.params.studentId });
-        const pgAnalyses = await listInPg('analyses', { student_id: req.params.studentId });
-        const analysis = pgAnalyses?.find(item => item.status === 'complete');
-        return res.json({
-          student: {
-            name: user?.name,
-            email: user?.email,
-            regNo: user?.reg_no,
-            targetRole: pgProfile.target_role,
-            githubUrl: pgProfile.github_url,
-            profileComplete: Boolean(pgProfile.resume_path && pgProfile.github_url)
-          },
-          analysis: analysis ? mapPgAnalysis(analysis) : null
-        });
-      }
-      if (!getMongoStatus()) {
-        return res.status(403).json({ error: 'Access denied. Student is not approved or not linked to your placement cell.' });
-      }
-    }
-    if (!getMongoStatus()) return res.status(404).json({ error: 'Student not found' });
-    // Authorization: only approved students
-    const profile = await StudentProfile.findOne({
-      userId: req.params.studentId,
-      placementCellId: req.user._id,
-      approvalStatus: 'approved'
-    }).populate('userId', 'name email regNo');
+    const studentId = req.params.studentId;
+    const allStudents = await getInstitutionStudents(req.user);
+    const targetStudent = allStudents.find(s => s.id === studentId);
 
-    if (!profile) {
-      return res.status(403).json({ error: 'Access denied. Student is not approved or not linked to your placement cell.' });
+    if (!targetStudent) {
+      return res.status(403).json({ error: 'Access denied. Student is not linked to your placement cell.' });
     }
 
-    const analysis = await Analysis.findOne({ studentId: req.params.studentId })
-      .sort({ createdAt: -1 });
+    if (targetStudent.approvalStatus !== 'approved') {
+      return res.status(403).json({ error: 'Access denied. Student profile is pending approval by your placement cell.' });
+    }
+
+    const analyses = targetStudent.analyses || [];
+    const latestAnalysis = analyses[0] || null;
+
+    // Generate historical record items
+    const history = analyses.map((a, idx) => ({
+      id: a._id || `analysis_${idx}`,
+      createdAt: a.createdAt || a.created_at || new Date(),
+      score: a.scores?.overall || a.jobReadinessScore || 0,
+      scores: a.scores || {},
+      targetRole: a.roleAnalysis?.targetRole || 'Software Engineer',
+      verifiedCount: (a.claimValidation || a.claim_validation || []).filter(c => c.status === 'verified').length,
+      unsupportedCount: (a.claimValidation || a.claim_validation || []).filter(c => c.status === 'requires_proof' || c.status === 'unsupported').length,
+      updatedFromProof: Boolean(a.updatedFromProof || a.latestProofUpdate),
+      latestProofUpdate: a.latestProofUpdate || null,
+      scoreChangeReason: a.scoreChangeReason || a.scoreExplanation || null
+    }));
+
+    // Personalized Summary for Placement Officer
+    const overallScore = latestAnalysis?.scores?.overall || latestAnalysis?.jobReadinessScore || 0;
+    const verifiedSkills = (latestAnalysis?.claimValidation || []).filter(c => c.status === 'verified').map(c => c.skill);
+    const unverifiedSkills = (latestAnalysis?.claimValidation || []).filter(c => c.status === 'requires_proof').map(c => c.skill);
+    const roleFit = latestAnalysis?.roleAnalysis?.targetRole || targetStudent.targetRole || 'Technical Candidate';
+
+    const personalizedSummary = {
+      readiness: overallScore,
+      strengths: latestAnalysis?.alreadyStrongIn?.length ? latestAnalysis.alreadyStrongIn : verifiedSkills.slice(0, 4),
+      gaps: latestAnalysis?.personSpecificGaps?.length ? latestAnalysis.personSpecificGaps.map(g => g.gap) : unverifiedSkills.slice(0, 4),
+      bestFitRoles: latestAnalysis?.bestFitRoles || latestAnalysis?.roleAnalysis?.suggestedRoles || [{ role: roleFit, fitScore: overallScore }],
+      nextAction: latestAnalysis?.nextBestAction || 'Review repository code contributions and verify technical claims.',
+      recommendationNote: overallScore >= 70
+        ? `Candidate shows strong verified alignment for ${roleFit}. Ready for technical campus placement rounds.`
+        : `Candidate needs focused project proof in ${unverifiedSkills.slice(0, 2).join(' & ') || 'core domains'} before final interview shortlisting.`
+    };
 
     res.json({
       student: {
-        name: profile.userId.name,
-        email: profile.userId.email,
-        regNo: profile.userId.regNo,
-        targetRole: profile.targetRole,
-        githubUrl: profile.githubUrl,
-        profileComplete: profile.profileComplete
+        name: targetStudent.name,
+        email: targetStudent.email,
+        regNo: targetStudent.regNo,
+        targetRole: targetStudent.targetRole,
+        githubUrl: targetStudent.githubUrl,
+        profileComplete: targetStudent.profileComplete,
+        approvedAt: targetStudent.approvedAt
       },
-      analysis: analysis || null
+      analysis: latestAnalysis,
+      history,
+      personalizedSummary
     });
   } catch (err) {
+    console.error('Failed to fetch student analysis:', err);
     res.status(500).json({ error: 'Failed to fetch student analysis' });
   }
 });
 
-// Batch analytics (only from approved students)
+// Batch analytics
 router.get('/analytics', async (req, res) => {
   try {
-    if (getPgStatus()) {
-      const profiles = await listInPg('student_profiles', { placement_cell_id: req.user._id.toString() }) || [];
-      const approvedProfiles = profiles.filter(profile => profile.approval_status === 'approved');
-      const analysisGroups = await Promise.all(approvedProfiles.map(profile =>
-        listInPg('analyses', { student_id: profile.user_id })
-      ));
-      const analyses = analysisGroups.flat().filter(analysis => analysis?.status === 'complete');
-      return res.json(buildAnalyticsPayload(profiles, analyses));
-    }
-    if (!getMongoStatus()) return res.json(buildAnalyticsPayload([], []));
-    // Get all approved students for this placement cell
-    const approvedProfiles = await StudentProfile.find({
-      placementCellId: req.user._id,
-      approvalStatus: 'approved'
-    }).populate('userId', 'name');
+    const allStudents = await getInstitutionStudents(req.user);
+    const approvedStudents = allStudents.filter(s => s.approvalStatus === 'approved');
+    const analyses = approvedStudents.flatMap(s => s.analyses || []).filter(a => a && (a.scores || a.jobReadinessScore));
 
-    const approvedIds = approvedProfiles.map(p => p.userId._id);
-
-    // Get analyses for approved students
-    const analyses = await Analysis.find({
-      studentId: { $in: approvedIds },
-      status: 'complete'
-    });
-
-    // Aggregate analytics
-    const totalApproved = approvedProfiles.length;
-    const totalAnalyzed = analyses.length;
-
-    // Skill claim vs proof aggregation
-    const skillCounts = {};
-    const skillVerified = {};
-    const roleCounts = {};
-    const scoreDistribution = [];
-
-    analyses.forEach(a => {
-      // Scores
-      if (a.scores && a.scores.overall) {
-        scoreDistribution.push(a.scores.overall);
-      }
-
-      // Claim validation
-      (a.claimValidation || []).forEach(cv => {
-        const skill = cv.skill.toLowerCase();
-        skillCounts[skill] = (skillCounts[skill] || 0) + 1;
-        if (cv.status === 'verified' || cv.status === 'partially_supported') {
-          skillVerified[skill] = (skillVerified[skill] || 0) + 1;
-        }
-      });
-
-      // Role analysis
-      if (a.roleAnalysis && a.roleAnalysis.targetRole) {
-        const role = a.roleAnalysis.targetRole;
-        roleCounts[role] = (roleCounts[role] || 0) + 1;
-      }
-    });
-
-    // Build claim vs proof insights
-    const claimVsProof = Object.entries(skillCounts).map(([skill, claimed]) => ({
-      skill,
-      claimed,
-      verified: skillVerified[skill] || 0,
-      claimRate: Math.round((claimed / totalAnalyzed) * 100),
-      verifyRate: Math.round(((skillVerified[skill] || 0) / totalAnalyzed) * 100),
-      gap: claimed - (skillVerified[skill] || 0)
-    })).sort((a, b) => b.gap - a.gap);
-
-    // Average scores
-    const avgScore = scoreDistribution.length > 0
-      ? Math.round(scoreDistribution.reduce((a, b) => a + b, 0) / scoreDistribution.length)
-      : 0;
-
-    // Common gaps from analyses
-    const allGaps = [];
-    analyses.forEach(a => {
-      if (a.roleAnalysis && a.roleAnalysis.gaps) {
-        allGaps.push(...a.roleAnalysis.gaps);
-      }
-    });
-    const gapCounts = {};
-    allGaps.forEach(g => {
-      gapCounts[g] = (gapCounts[g] || 0) + 1;
-    });
-    const commonGaps = Object.entries(gapCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([gap, count]) => ({ gap, count, percentage: Math.round((count / totalAnalyzed) * 100) }));
-
-    res.json({
-      summary: {
-        totalStudents: await StudentProfile.countDocuments({ placementCellId: req.user._id }),
-        totalApproved,
-        totalAnalyzed,
-        pendingApproval: await StudentProfile.countDocuments({
-          placementCellId: req.user._id,
-          approvalStatus: 'pending'
-        }),
-        averageScore: avgScore
-      },
-      claimVsProof: claimVsProof.slice(0, 20),
-      commonGaps,
-      roleDistribution: Object.entries(roleCounts).map(([role, count]) => ({ role, count })),
-      scoreDistribution
-    });
+    res.json(buildAnalyticsPayload(allStudents, analyses, req.user));
   } catch (err) {
     console.error('Analytics error:', err);
     res.status(500).json({ error: 'Failed to generate analytics' });
@@ -298,38 +368,45 @@ router.get('/analytics', async (req, res) => {
 // Placement cell dashboard
 router.get('/dashboard', async (req, res) => {
   try {
-    if (getPgStatus()) {
-      const profiles = await listInPg('student_profiles', { placement_cell_id: req.user._id.toString() }) || [];
-      return res.json({
-        user: req.user.toJSON(),
-        stats: {
-          totalStudents: profiles.length,
-          pendingCount: profiles.filter(profile => profile.approval_status === 'pending').length,
-          approvedCount: profiles.filter(profile => profile.approval_status === 'approved').length
-        }
-      });
+    const allStudents = await getInstitutionStudents(req.user);
+    const totalStudents = allStudents.length;
+    const pendingCount = allStudents.filter(s => s.approvalStatus === 'pending').length;
+    const approvedCount = allStudents.filter(s => s.approvalStatus === 'approved').length;
+    const analyzedCount = allStudents.filter(s => s.approvalStatus === 'approved' && s.analyses?.length > 0).length;
+
+    const scores = allStudents
+      .filter(s => s.approvalStatus === 'approved' && s.analyses?.[0]?.scores?.overall)
+      .map(s => s.analyses[0].scores.overall);
+    const averageScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+
+    const instName = req.user.institutionName || req.user.institutionCode || 'your institution';
+    let personalizedInsights = '';
+    if (approvedCount === 0) {
+      personalizedInsights = `You have ${pendingCount} student${pendingCount === 1 ? '' : 's'} awaiting approval. Review the pending queue to activate institutional cohort monitoring.`;
+    } else if (analyzedCount > 0) {
+      personalizedInsights = `Among the currently approved ${instName} students, the cohort average readiness is ${averageScore}/100 across ${analyzedCount} active diagnostic reports.`;
+    } else {
+      personalizedInsights = `${approvedCount} approved students actively linked to ${instName}. Diagnostics in progress.`;
     }
-    if (!getMongoStatus()) return res.json({ user: req.user, stats: { totalStudents: 0, pendingCount: 0, approvedCount: 0 } });
-    const totalStudents = await StudentProfile.countDocuments({ placementCellId: req.user._id });
-    const pendingCount = await StudentProfile.countDocuments({
-      placementCellId: req.user._id,
-      approvalStatus: 'pending'
-    });
-    const approvedCount = await StudentProfile.countDocuments({
-      placementCellId: req.user._id,
-      approvalStatus: 'approved'
-    });
 
     res.json({
-      user: req.user.toJSON(),
-      stats: { totalStudents, pendingCount, approvedCount }
+      user: req.user.toJSON ? req.user.toJSON() : { ...req.user },
+      stats: {
+        totalStudents,
+        pendingCount,
+        approvedCount,
+        analyzedCount,
+        averageScore,
+        personalizedInsights
+      }
     });
   } catch (err) {
+    console.error('Dashboard error:', err);
     res.status(500).json({ error: 'Failed to fetch dashboard' });
   }
 });
 
-function buildAnalyticsPayload(profiles, analyses) {
+function buildAnalyticsPayload(students, analyses, placementOfficer) {
   const skillCounts = {};
   const skillVerified = {};
   const roleCounts = {};
@@ -337,19 +414,27 @@ function buildAnalyticsPayload(profiles, analyses) {
   const allGaps = [];
 
   analyses.forEach(analysis => {
-    const overall = analysis.scores?.overall;
+    const overall = analysis.scores?.overall || analysis.jobReadinessScore;
     if (Number.isFinite(overall)) scoreDistribution.push(overall);
-    (analysis.claim_validation || []).forEach(claim => {
-      const skill = String(claim.skill || '').toLowerCase();
+
+    const claims = analysis.claimValidation || analysis.claim_validation || [];
+    claims.forEach(claim => {
+      const skill = String(claim.skill || '').toLowerCase().trim();
       if (!skill) return;
       skillCounts[skill] = (skillCounts[skill] || 0) + 1;
       if (claim.status === 'verified' || claim.status === 'partially_supported') {
         skillVerified[skill] = (skillVerified[skill] || 0) + 1;
       }
     });
-    const role = analysis.role_analysis?.targetRole;
+
+    const role = analysis.roleAnalysis?.targetRole || analysis.role_analysis?.targetRole;
     if (role) roleCounts[role] = (roleCounts[role] || 0) + 1;
-    allGaps.push(...(analysis.role_analysis?.gaps || []));
+
+    const gaps = analysis.personSpecificGaps || analysis.roleAnalysis?.gaps || [];
+    gaps.forEach(g => {
+      const gapTitle = typeof g === 'string' ? g : (g.gap || g.title);
+      if (gapTitle) allGaps.push(gapTitle);
+    });
   });
 
   const totalAnalyzed = analyses.length;
@@ -362,6 +447,7 @@ function buildAnalyticsPayload(profiles, analyses) {
     verifyRate: Math.round(((skillVerified[skill] || 0) / denominator) * 100),
     gap: claimed - (skillVerified[skill] || 0)
   })).sort((a, b) => b.gap - a.gap);
+
   const gapCounts = {};
   allGaps.forEach(gap => { gapCounts[gap] = (gapCounts[gap] || 0) + 1; });
   const commonGaps = Object.entries(gapCounts)
@@ -369,15 +455,22 @@ function buildAnalyticsPayload(profiles, analyses) {
     .slice(0, 10)
     .map(([gap, count]) => ({ gap, count, percentage: Math.round((count / denominator) * 100) }));
 
+  const instName = placementOfficer?.institutionName || placementOfficer?.institutionCode || 'Cohort';
+  const topGap = commonGaps[0]?.gap;
+  const personalizedTrainingRecommendation = topGap
+    ? `Among the currently approved ${instName} students, ${topGap} is one of the most common evidence gaps, so targeted project bootcamps in this domain would be a high-value batch training priority.`
+    : `Batch diagnostic shows balanced foundational skill demonstration across active ${instName} candidates.`;
+
   return {
     summary: {
-      totalStudents: profiles.length,
-      totalApproved: profiles.filter(profile => profile.approval_status === 'approved').length,
+      totalStudents: students.length,
+      totalApproved: students.filter(s => s.approvalStatus === 'approved').length,
       totalAnalyzed,
-      pendingApproval: profiles.filter(profile => profile.approval_status === 'pending').length,
+      pendingApproval: students.filter(s => s.approvalStatus === 'pending').length,
       averageScore: scoreDistribution.length
         ? Math.round(scoreDistribution.reduce((total, score) => total + score, 0) / scoreDistribution.length)
-        : 0
+        : 0,
+      personalizedTrainingRecommendation
     },
     claimVsProof: claimVsProof.slice(0, 20),
     commonGaps,
@@ -400,8 +493,6 @@ function mapPgAnalysis(analysis) {
     roleAnalysis: analysis.role_analysis,
     recommendations: analysis.recommendations,
     roadmap: analysis.roadmap,
-
-    // Personalized Learning & YouTube Recommendation fields
     recommendationObject: recs.recommendationObject || extracted.recommendationObject || null,
     personSpecificGaps: recs.personSpecificGaps || extracted.personSpecificGaps || [],
     learningRecommendations: recs.learningRecommendations || extracted.learningRecommendations || [],
@@ -412,10 +503,10 @@ function mapPgAnalysis(analysis) {
     scoreExplanation: recs.scoreExplanation || extracted.scoreExplanation || '',
     nextBestAction: recs.nextBestAction || extracted.nextBestAction || '',
     sourceTexts: recs.sourceTexts || extracted.sourceTexts || {},
-
     createdAt: analysis.created_at,
     updatedAt: analysis.updated_at
   };
 }
 
 module.exports = router;
+
