@@ -83,7 +83,7 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
         </div>
 
         {/* Personalized Claim Explanation */}
-        {claim.explanation && (
+        {(claim.personalized_message || claim.explanation) && (
           <div style={{
             fontSize: '0.88rem',
             color: 'var(--text-primary)',
@@ -95,44 +95,55 @@ export function ClaimCard({ claim, analysisId, studentId, onProofAdded }) {
             border: '1px solid var(--border-subtle)',
             borderLeft: claim.updatedFromProof ? '3px solid var(--horizon-cyan)' : '3px solid var(--horizon-blue)'
           }}>
-            {claim.explanation}
+            {claim.personalized_message || claim.explanation}
           </div>
         )}
 
         {/* Evidence Details */}
-        {claim.evidenceDetails && claim.evidenceDetails.length > 0 && (
+        {((claim.evidenceDetails && claim.evidenceDetails.length > 0) || (claim.supporting_evidence && claim.supporting_evidence.length > 0)) && (
           <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '10px' }}>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, letterSpacing: '0.04em' }}>
               Supporting Evidence Details
             </div>
-            {claim.evidenceDetails.map((d, i) => (
-              <div key={i} style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', color: d.source === 'user_provided_proof' ? 'var(--horizon-cyan)' : 'var(--horizon-blue)', borderColor: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.3)' : 'rgba(66,114,255,0.3)', background: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.1)' : 'rgba(66,114,255,0.12)' }}>
-                  {d.source === 'user_provided_proof' ? 'user proof (pending validation)' : d.source}
-                </span>
-                <span>{d.detail}</span>
-              </div>
-            ))}
+            {claim.evidenceDetails && claim.evidenceDetails.length > 0 ? (
+              claim.evidenceDetails.map((d, i) => (
+                <div key={i} style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', color: d.source === 'user_provided_proof' ? 'var(--horizon-cyan)' : 'var(--horizon-blue)', borderColor: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.3)' : 'rgba(66,114,255,0.3)', background: d.source === 'user_provided_proof' ? 'rgba(66,234,255,0.1)' : 'rgba(66,114,255,0.12)' }}>
+                    {d.source === 'user_provided_proof' ? 'user proof (pending validation)' : d.source}
+                  </span>
+                  <span>{d.detail}</span>
+                </div>
+              ))
+            ) : (
+              claim.supporting_evidence.map((ev, i) => (
+                <div key={i} style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span className="tag" style={{ fontSize: '0.7rem', padding: '2px 8px', color: 'var(--horizon-blue)', borderColor: 'rgba(66,114,255,0.3)', background: 'rgba(66,114,255,0.12)' }}>
+                    evidence
+                  </span>
+                  <span>{ev}</span>
+                </div>
+              ))
+            )}
           </div>
         )}
 
         {/* Sources & Verification Status */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-          {claim.evidenceIn && claim.evidenceIn.length > 0 ? (
+          {(claim.supporting_sources || claim.evidenceIn)?.length > 0 ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginRight: 4 }}>
                 Sources:
               </span>
-              {claim.evidenceIn.map(src => (
+              {(claim.supporting_sources || claim.evidenceIn).map(src => (
                 <span key={src} className="tag" style={{ fontSize: '0.72rem' }}>
-                  {src === 'user_proof' ? 'User-Provided Proof' : src}
+                  {src === 'user_proof' || src === 'user_provided_proof' ? 'User-Provided Proof' : src}
                 </span>
               ))}
             </div>
           ) : <div />}
 
           <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-            Verification: Pending deeper ownership validation
+            Verification: {claim.validation_status ? `${claim.validation_status} deeper ownership validation` : 'Pending deeper ownership validation'}
           </span>
         </div>
       </div>
