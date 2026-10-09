@@ -260,8 +260,9 @@ router.post('/run', async (req, res) => {
       const isGfgSame = Boolean(
         prevGfg &&
         !prevGfg.error &&
+        prevGfg.extracted !== false &&
         !isExplicitRefresh &&
-        (prevGfg.sourceUrl === profile.gfgUrl || !prevGfg.sourceUrl)
+        prevGfg.sourceUrl === profile.gfgUrl
       );
       if (isGfgSame) {
         extracted.gfg = prevGfg;
@@ -272,7 +273,7 @@ router.post('/run', async (req, res) => {
             extracted.gfg.sourceUrl = profile.gfgUrl;
           }
         } catch (e) {
-          extracted.gfg = { error: e.message };
+          extracted.gfg = { error: e.message, extracted: false };
         }
       }
     }
@@ -284,8 +285,8 @@ router.post('/run', async (req, res) => {
         !prevLinkedin.error &&
         prevLinkedin.extracted !== false &&
         !isExplicitRefresh &&
-        (prevLinkedin.sourceUrl === profile.linkedinUrl || !prevLinkedin.sourceUrl) &&
-        (prevLinkedin.pdfPath === profile.linkedinPdfPath || !prevLinkedin.pdfPath)
+        (profile.linkedinUrl ? prevLinkedin.sourceUrl === profile.linkedinUrl : !prevLinkedin.sourceUrl) &&
+        (profile.linkedinPdfPath ? prevLinkedin.pdfPath === profile.linkedinPdfPath : !prevLinkedin.pdfPath)
       );
       if (isLinkedinSame) {
         extracted.linkedin = prevLinkedin;

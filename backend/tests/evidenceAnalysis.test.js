@@ -88,3 +88,37 @@ test('DOCX resume text extraction reads paragraphs from the document body', asyn
 
   assert.equal(await extractResumeText(buffer, '.docx'), 'Java developer\nSpring Boot project');
 });
+
+test('GeeksforGeeks problem solving verifies DSA resume claim without requiring GitHub DSA repo', () => {
+  const extracted = {
+    resume: { skills: ['DSA'], languages: [], technologies: [], projects: [] },
+    github: { repositories: [], languageTotals: {}, originalRepoCount: 0, forkedRepoCount: 0 },
+    gfg: { extracted: true, totalProblemsSolved: 45, codingScore: 120 }
+  };
+  const evidence = normalizeEvidence(extracted);
+  const [claim] = buildClaimValidation(evidence, extracted);
+
+  assert.equal(claim.status, 'verified');
+  assert.match(claim.explanation, /GeeksforGeeks profile provides strong direct evidence with 45 solved problems/);
+  assert.ok(evidence.codingEvidence.gfg);
+  assert.equal(evidence.codingEvidence.gfg.totalProblemsSolved, 45);
+});
+
+test('LinkedIn professional experience and certifications support role-specific skill claims', () => {
+  const extracted = {
+    resume: { skills: ['AWS', 'Java'], languages: ['Java'], technologies: ['AWS'], projects: [] },
+    github: { repositories: [], languageTotals: {}, originalRepoCount: 0, forkedRepoCount: 0 },
+    linkedin: {
+      extracted: true,
+      experience: [{ role: 'Cloud Engineer', company: 'TechCorp', description: 'Architected AWS services' }],
+      certifications: [{ name: 'AWS Certified Solutions Architect', issuer: 'Amazon Web Services' }]
+    }
+  };
+  const evidence = normalizeEvidence(extracted);
+  const claims = buildClaimValidation(evidence, extracted);
+  const awsClaim = claims.find(c => c.skill === 'AWS');
+
+  assert.equal(awsClaim.status, 'verified');
+  assert.ok(awsClaim.evidenceIn.includes('linkedin'));
+  assert.match(awsClaim.explanation, /AWS/);
+});

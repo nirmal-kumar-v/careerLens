@@ -207,6 +207,8 @@ function normalizeEvidence(extractedData) {
     evidence.codingEvidence.gfg = {
       totalProblemsSolved: totalSolved,
       codingScore: gfg.codingScore || 0,
+      monthlyScore: gfg.monthlyScore || 0,
+      languages: gfg.languages || [],
       problemsByDifficulty: gfg.problemsByDifficulty || {}
     };
     if (totalSolved > 0) {
@@ -220,7 +222,7 @@ function normalizeEvidence(extractedData) {
         const existing = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === normalizeSkill(term));
         if (existing) {
           if (!existing.sources.includes('gfg')) existing.sources.push('gfg');
-          existing.evidence += `; ${totalSolved} problems solved on GeeksforGeeks`;
+          existing.evidence += `; ${totalSolved} problems solved on GeeksforGeeks (Score: ${gfg.codingScore || 0})`;
         } else {
           evidence.observedTechnologies.push({
             tech: term,
@@ -230,34 +232,107 @@ function normalizeEvidence(extractedData) {
           });
         }
       });
+
+      // Practiced languages on GFG
+      (gfg.languages || []).forEach(lang => {
+        const langName = typeof lang === 'string' ? lang : (lang?.name || '');
+        if (!langName) return;
+        const existing = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === normalizeSkill(langName));
+        if (existing) {
+          if (!existing.sources.includes('gfg')) existing.sources.push('gfg');
+        } else {
+          evidence.observedTechnologies.push({
+            tech: langName,
+            sources: ['gfg'],
+            evidence: `Practiced on GeeksforGeeks (${totalSolved} total problems)`,
+            strengthSignal: totalSolved > 50 ? 'strong' : 'moderate'
+          });
+        }
+      });
     }
-  } else if (!gfg) {
+  } else if (!gfg || gfg.extracted === false) {
     evidence.missingSources.push('gfg');
   }
 
-  // ──── LINKEDIN ────
+  // ──── LINKEDIN (URL or Profile PDF) ────
   if (linkedin && linkedin.extracted) {
-    (linkedin.skills || []).forEach(s => {
-      const existing = evidence.observedTechnologies.find(t => t.tech.toLowerCase() === s.toLowerCase());
+    const linkedinSkills = Array.isArray(linkedin.skills) ? linkedin.skills : (linkedin.skills?.all || []);
+    linkedinSkills.forEach(s => {
+      const existing = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === normalizeSkill(s));
       if (existing) {
         if (!existing.sources.includes('linkedin')) existing.sources.push('linkedin');
       } else {
-        evidence.observedTechnologies.push({ tech: s, sources: ['linkedin'], evidence: 'Listed on LinkedIn profile', strengthSignal: 'weak' });
+        evidence.observedTechnologies.push({
+          tech: s,
+          sources: ['linkedin'],
+          evidence: 'Listed on verified LinkedIn profile',
+          strengthSignal: 'moderate'
+        });
       }
     });
-    (linkedin.projects || []).forEach(p => {
-      evidence.observedProjects.push({
-        name: p.name, description: p.description,
-        technologies: [], source: 'linkedin',
-        isForked: false, ownershipConfidence: 'low'
+
+    // LinkedIn Experience
+    const exps = linkedin.experience || [];
+    exps.forEach(exp => {
+      const roleStr = exp.role || exp.title || '';
+      const compStr = exp.company || '';
+      const descStr = exp.description || '';
+      const expSkills = Array.isArray(exp.skills) ? exp.skills : [];
+
+      expSkills.forEach(s => {
+        const existing = evidence.observedTechnologies.find(t => normalizeSkill(t.tech) === normalizeSkill(s));
+        if (existing) {
+          if (!existing.sources.includes('linkedin')) existing.sources.push('linkedin');
+          if (!existing.evidence.includes(compStr)) existing.evidence += `; used at ${compStr}`;
+        } else {
+          evidence.observedTechnologies.push({
+            tech: s,
+            sources: ['linkedin'],
+            evidence: `Applied in role '${roleStr}' at ${compStr}`,
+            strengthSignal: 'strong'
+          });
+        }
       });
     });
+
+    // LinkedIn Certifications
+    const certs = linkedin.certifications || [];
+    certs.forEach(c => {
+      const certName = typeof c === 'string' ? c : (c.name || c.title || '');
+      const certIssuer = typeof c === 'object' ? (c.issuer || c.authority || '') : '';
+      if (certName) {
+        evidence.observedTechnologies.push({
+          tech: certName,
+          sources: ['linkedin'],
+          evidence: `Certified: ${certName}${certIssuer ? ` by ${certIssuer}` : ''}`,
+          strengthSignal: 'strong'
+        });
+      }
+    });
+
+    // LinkedIn Projects
+    const projs = linkedin.projects || [];
+    projs.forEach(p => {
+      evidence.observedProjects.push({
+        name: p.name || p.title || 'Project',
+        description: p.description || '',
+        technologies: Array.isArray(p.technologies) ? p.technologies : [],
+        source: 'linkedin',
+        url: p.url || '',
+        isForked: false,
+        ownershipConfidence: 'medium'
+      });
+    });
+
     evidence.activityEvidence.linkedin = {
-      hasExperience: (linkedin.experience || []).length > 0,
-      experienceCount: (linkedin.experience || []).length,
-      certifications: linkedin.certifications || []
+      hasExperience: exps.length > 0,
+      experienceCount: exps.length,
+      experience: exps,
+      education: linkedin.education || [],
+      certifications: certs,
+      skills: linkedinSkills
     };
-  } else if (!linkedin) {
+  } else if (!linkedin || linkedin.extracted === false) {
     evidence.missingSources.push('linkedin');
   }
 

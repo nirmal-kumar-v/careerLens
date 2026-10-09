@@ -285,7 +285,7 @@ function buildLinkedinSourceText(linkedin) {
 
   // ABOUT
   lines.push('ABOUT');
-  lines.push(prof.about || prof.summary || linkedin.summary || 'Not available');
+  lines.push(prof.about || prof.summary || linkedin.about || linkedin.summary || 'Not available');
   lines.push('');
 
   // EXPERIENCE
@@ -631,10 +631,17 @@ function buildOtherSourcesText(extractedData = {}) {
 
   if (extractedData.gfg && extractedData.gfg.extracted) {
     const gfg = extractedData.gfg;
-    sections.push(`===== GEEKSFORGEEKS =====
-Problems Solved: ${gfg.totalProblemsSolved || 0}
-Coding Score: ${gfg.codingScore || 0}
-Monthly Score: ${gfg.monthlyScore || 0}`);
+    const gfgLines = ['===== GEEKSFORGEEKS ====='];
+    if (gfg.username) gfgLines.push(`Username: ${gfg.username}`);
+    if (gfg.name && gfg.name !== gfg.username) gfgLines.push(`Name: ${gfg.name}`);
+    if (gfg.headline) gfgLines.push(`Headline / Institute: ${gfg.headline}`);
+    gfgLines.push(`Problems Solved: ${gfg.totalProblemsSolved || 0}`);
+    gfgLines.push(`Coding Score: ${gfg.codingScore || 0}`);
+    gfgLines.push(`Monthly Score: ${gfg.monthlyScore || 0}`);
+    if (gfg.languages?.length) {
+      gfgLines.push(`Languages: ${gfg.languages.join(', ')}`);
+    }
+    sections.push(gfgLines.join('\n'));
   }
 
   if (extractedData.figma && extractedData.figma.extracted) {

@@ -584,8 +584,6 @@ function buildClaimValidation(evidence, extractedData = {}) {
       if ((gfg.totalProblemsSolved || 0) > 0) sourcesSet.add('gfg');
     }
 
-    const sources = [...sourcesSet];
-
     // Build raw evidence details
     const evidenceDetails = [];
 
@@ -654,14 +652,53 @@ function buildClaimValidation(evidence, extractedData = {}) {
       });
     }
 
-    // LinkedIn details
-    if (matches.some(m => m.sources?.includes('linkedin'))) {
+    // LinkedIn details (Experience, Certifications, Skills)
+    const linkedinExps = linkedin.experience || [];
+    const matchingLinkedinExp = linkedinExps.filter(exp => {
+      const text = `${exp.role || ''} ${exp.company || ''} ${exp.description || ''} ${(exp.skills || []).join(' ')}`;
+      const escaped = escapeRegex(skill);
+      return new RegExp(`(^|[^a-z0-9+#])${escaped}($|[^a-z0-9+#])`, 'i').test(text);
+    });
+
+    const linkedinCerts = linkedin.certifications || [];
+    const matchingLinkedinCerts = linkedinCerts.filter(cert => {
+      const certName = typeof cert === 'string' ? cert : (cert.name || cert.title || '');
+      const escaped = escapeRegex(skill);
+      return new RegExp(`(^|[^a-z0-9+#])${escaped}($|[^a-z0-9+#])`, 'i').test(certName);
+    });
+
+    if (matchingLinkedinExp.length > 0) {
+      sourcesSet.add('linkedin');
+      matchingLinkedinExp.forEach(exp => {
+        evidenceDetails.push({
+          source: 'linkedin',
+          detail: `Demonstrated in professional role '${exp.role || 'Role'}' at ${exp.company || 'Company'}${exp.duration ? ` (${exp.duration})` : ''}.`,
+          strength: 'strong'
+        });
+      });
+    }
+
+    if (matchingLinkedinCerts.length > 0) {
+      sourcesSet.add('linkedin');
+      matchingLinkedinCerts.forEach(cert => {
+        const cName = typeof cert === 'string' ? cert : cert.name;
+        const cIssuer = typeof cert === 'object' ? (cert.issuer || '') : '';
+        evidenceDetails.push({
+          source: 'linkedin',
+          detail: `Verified certification: ${cName}${cIssuer ? ` by ${cIssuer}` : ''}.`,
+          strength: 'strong'
+        });
+      });
+    } else if (matches.some(m => m.sources?.includes('linkedin'))) {
+      sourcesSet.add('linkedin');
       evidenceDetails.push({
         source: 'linkedin',
         detail: `Listed on verified LinkedIn profile.`,
-        strength: 'weak'
+        strength: 'moderate'
       });
     }
+
+    const sources = [...sourcesSet];
 
     // Determine Status
     let status = 'requires_proof';
@@ -680,22 +717,23 @@ function buildClaimValidation(evidence, extractedData = {}) {
         status = 'requires_proof';
       }
     } else if (domain === 'frontend' || domain === 'backend_system') {
-      if (matchingRepos.length > 0 || (matchingPortfolioProjects.length > 0 && sources.length >= 2)) {
+      if (matchingRepos.length > 0 || (matchingPortfolioProjects.length > 0 && sources.length >= 2) || matchingLinkedinExp.length > 0 || matchingLinkedinCerts.length > 0) {
         status = 'verified';
-      } else if (matchingPortfolioProjects.length > 0 || matchingResumeProjects.length > 0 || matches.length > 0) {
+      } else if (matchingPortfolioProjects.length > 0 || matchingResumeProjects.length > 0 || matches.length > 0 || sources.includes('linkedin')) {
         status = 'partially_supported';
-      } else if (isGithubUnavailable && !portfolio.extracted) {
+      } else if (isGithubUnavailable && !portfolio.extracted && !linkedin.extracted) {
         status = 'not_verifiable';
       } else {
         status = 'requires_proof';
       }
     } else if (domain === 'language') {
       const leetcodeHasLang = (leetcode.languages || []).some(l => normalizeSkill(typeof l === 'string' ? l : (l?.language || l?.languageName || '')) === normalizeSkill(skill));
-      if (matchingRepos.length > 0 || (leetcodeHasLang && (leetcode.totalSolved || 0) >= 30)) {
+      const gfgHasLang = (gfg.languages || []).some(l => normalizeSkill(typeof l === 'string' ? l : (l?.name || '')) === normalizeSkill(skill));
+      if (matchingRepos.length > 0 || matchingLinkedinExp.length > 0 || matchingLinkedinCerts.length > 0) {
         status = 'verified';
       } else if (matchingResumeProjects.length > 0) {
         status = 'partially_supported';
-      } else if (isGithubUnavailable && isLeetcodeUnavailable) {
+      } else if (isGithubUnavailable && isLeetcodeUnavailable && isGfgUnavailable) {
         status = 'not_verifiable';
       } else {
         status = 'requires_proof';
@@ -711,10 +749,20 @@ function buildClaimValidation(evidence, extractedData = {}) {
         status = 'requires_proof';
       }
     } else if (domain === 'methodology') {
-      if (linkedin.extracted || (resume.experience || []).length > 0) {
+      if (matchingLinkedinExp.length > 0 || linkedin.extracted || (resume.experience || []).length > 0) {
         status = 'verified';
       } else {
         status = 'partially_supported';
+      }
+    } else {
+      if (matchingRepos.length > 0 || (matchingPortfolioProjects.length > 0 && sourcesSet.size >= 2) || matchingLinkedinExp.length > 0 || matchingLinkedinCerts.length > 0) {
+        status = 'verified';
+      } else if (matchingPortfolioProjects.length > 0 || matchingResumeProjects.length > 0 || matches.length > 0 || sourcesSet.has('linkedin')) {
+        status = 'partially_supported';
+      } else if (isGithubUnavailable && !portfolio.extracted && !linkedin.extracted) {
+        status = 'not_verifiable';
+      } else {
+        status = 'requires_proof';
       }
     }
 
@@ -724,11 +772,11 @@ function buildClaimValidation(evidence, extractedData = {}) {
       const leetcodeCount = leetcode.totalSolved || 0;
       const gfgCount = gfg.totalProblemsSolved || 0;
       if (leetcodeCount >= 30 && gfgCount > 0) {
-        explanation = `Your resume lists ${skill}, and your coding-platform activity provides strong direct evidence: your LeetCode profile shows around ${leetcodeCount} solved problems (Easy: ${leetcode.easySolved || 0}, Medium: ${leetcode.mediumSolved || 0}, Hard: ${leetcode.hardSolved || 0}), with additional problem-solving evidence on GeeksforGeeks (${gfgCount} problems). GitHub does not need to contain a dedicated DSA repository for this claim, so the current evidence supports your DSA and problem-solving ability.`;
+        explanation = `Your resume lists ${skill}, and your coding-platform activity provides strong direct evidence: your LeetCode profile shows around ${leetcodeCount} solved problems (Easy: ${leetcode.easySolved || 0}, Medium: ${leetcode.mediumSolved || 0}, Hard: ${leetcode.hardSolved || 0}), with additional problem-solving evidence on GeeksforGeeks (${gfgCount} problems, Coding score: ${gfg.codingScore || 0}). GitHub does not need to contain a dedicated DSA repository for this claim, so the current evidence supports your DSA and problem-solving ability.`;
       } else if (leetcodeCount >= 30) {
         explanation = `Your resume lists ${skill}, and your coding-platform activity provides strong direct evidence: your LeetCode profile shows around ${leetcodeCount} solved problems (Easy: ${leetcode.easySolved || 0}, Medium: ${leetcode.mediumSolved || 0}, Hard: ${leetcode.hardSolved || 0}). GitHub does not need to contain a dedicated DSA repository for this claim, so the current evidence supports your DSA and problem-solving ability.`;
       } else if (gfgCount >= 30) {
-        explanation = `Your resume lists ${skill}, and your GeeksforGeeks profile provides strong direct evidence with ${gfgCount} solved problems (Coding score: ${gfg.codingScore || 0}). The claim is well supported by competitive programming practice.`;
+        explanation = `Your resume lists ${skill}, and your GeeksforGeeks profile provides strong direct evidence with ${gfgCount} solved problems (Coding score: ${gfg.codingScore || 0}). GitHub does not need to contain a dedicated DSA repository for this claim, so the current evidence supports your DSA and problem-solving ability.`;
       } else if (leetcodeCount > 0 || gfgCount > 0) {
         explanation = `Your resume lists ${skill}, and your connected coding profiles show an initial foundation with ${leetcodeCount + gfgCount} solved problems. Solving more Medium-level problems will provide stronger proof for technical interviews.`;
       } else if (status === 'not_verifiable') {
@@ -750,6 +798,13 @@ function buildClaimValidation(evidence, extractedData = {}) {
         explanation = `You list ${skill} on your resume, and it is actively demonstrated in your GitHub repository '${matchingRepos[0].name}' as well as showcased in your portfolio project '${matchingPortfolioProjects[0].name}'. The claim is well supported with hands-on project implementation.`;
       } else if (matchingRepos.length > 0) {
         explanation = `Your resume claims ${skill}, and your GitHub profile confirms real-world implementation across ${matchingRepos.length} repositor${matchingRepos.length === 1 ? 'y' : 'ies'} including '${matchingRepos[0].name}'. The claim is well supported by codebase evidence.`;
+      } else if (matchingLinkedinExp.length > 0) {
+        const firstExp = matchingLinkedinExp[0];
+        explanation = `Your resume lists ${skill}, and your LinkedIn profile confirms practical experience in your role as '${firstExp.role || 'Role'}' at ${firstExp.company || 'Company'}${firstExp.duration ? ` (${firstExp.duration})` : ''}.`;
+      } else if (matchingLinkedinCerts.length > 0) {
+        const firstCert = matchingLinkedinCerts[0];
+        const cName = typeof firstCert === 'string' ? firstCert : firstCert.name;
+        explanation = `Your resume lists ${skill}, and your verified LinkedIn profile confirms professional certification in '${cName}'.`;
       } else if (domain === 'design' && figma.extracted) {
         explanation = `Your resume lists ${skill}, and your connected Figma workspace validates this with ${(figma.projects || []).length} active design project(s).`;
       } else if (matchingPortfolioProjects.length > 0) {
@@ -760,6 +815,8 @@ function buildClaimValidation(evidence, extractedData = {}) {
     } else if (status === 'partially_supported') {
       if (matchingResumeProjects.length > 0) {
         explanation = `You list ${skill} in your resume and project descriptions (${matchingResumeProjects.map(p => p.name).join(', ')}), but the available GitHub and portfolio evidence does not yet show substantial hands-on ${skill} codebase artifacts. The claim is therefore currently supported in project context but needs stronger implementation evidence.`;
+      } else if (sources.includes('linkedin')) {
+        explanation = `You list ${skill} on your resume and LinkedIn profile, but connected repositories or portfolio projects show limited hands-on code artifacts. Adding repository code or live deployments will fully verify this claim.`;
       } else {
         explanation = `You list ${skill} on your resume with preliminary mention, but connected repositories or portfolio projects show limited hands-on artifacts. Adding repository code or live deployments will fully verify this claim.`;
       }
@@ -906,9 +963,9 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
     overall: overallScore,
     technicalSkills: {
       score: techScore,
-      explanation: `Evaluated ${claims.length} resume skills across GitHub, LeetCode, Portfolio, and connected profiles. ${verifiedCount} verified, ${partialCount} weak, ${unsupportedCount} unsupported.`,
+      explanation: `Evaluated ${claims.length} resume skills across GitHub, LeetCode, GeeksforGeeks, LinkedIn, Portfolio, and connected profiles. ${verifiedCount} verified, ${partialCount} weak, ${unsupportedCount} unsupported.`,
       details: {
-        awarded: `${verifiedCount} skills verified with multi-source code and problem solving evidence.`,
+        awarded: `${verifiedCount} skills verified with multi-source code, work experience, certifications, and problem solving evidence.`,
         reduced: `${unsupportedCount} skills claimed without observable artifacts.`,
         improve: 'Demonstrate unsupported skills through projects or coding platform practice.'
       }
@@ -926,18 +983,26 @@ function applyEvidenceAlignment(evaluation, evidence, extractedData) {
       score: Math.round((techScore + projScore) / 2),
       explanation: 'Balance of claimed skills versus actual project implementations and coding artifacts.',
       details: {
-        awarded: 'Practical project and coding work verified across connected sources.',
+        awarded: 'Practical project, professional experience, and coding work verified across connected sources.',
         reduced: 'Some claimed skills lack project-level evidence.',
         improve: 'Build end-to-end applications showcasing claimed technologies.'
       }
     },
     codingActivity: {
       score: activityScore,
-      explanation: extractedData.leetcode?.totalSolved
-        ? `LeetCode: ${extractedData.leetcode.totalSolved} solved problems. GitHub activity evaluated.`
-        : (extractedData.gfg?.totalProblemsSolved
-          ? `GeeksforGeeks: ${extractedData.gfg.totalProblemsSolved} problems solved. GitHub activity evaluated.`
-          : 'GitHub and coding activity evaluated.'),
+      explanation: (() => {
+        const parts = [];
+        if (extractedData.leetcode?.totalSolved) {
+          parts.push(`LeetCode: ${extractedData.leetcode.totalSolved} solved problems`);
+        }
+        if (extractedData.gfg?.totalProblemsSolved) {
+          parts.push(`GeeksforGeeks: ${extractedData.gfg.totalProblemsSolved} solved problems (Score: ${extractedData.gfg.codingScore || 0})`);
+        }
+        if (extractedData.github?.recentActivity?.length) {
+          parts.push(`GitHub: ${extractedData.github.recentActivity.length} recent activity events`);
+        }
+        return parts.length ? parts.join('; ') + '.' : 'GitHub and coding activity evaluated.';
+      })(),
       details: {
         awarded: 'Coding profile connected and active problem solving detected.',
         reduced: 'Activity intensity could be more consistent.',
@@ -1160,13 +1225,14 @@ function generateDeterministicEvaluation(evidence, targetRole, extractedData) {
   const projScore = github.originalRepoCount ? Math.min(90, 40 + github.originalRepoCount * 10) : 40;
   const totalSolved = (leetcode.totalSolved || 0) + (gfg.totalProblemsSolved || 0);
   const activityScore = totalSolved ? Math.min(95, 30 + Math.floor(totalSolved / 5)) : (github.originalRepoCount ? 65 : 35);
-  const roleScore = targetRole ? 75 : 70;
+  const hasExp = (extractedData.linkedin?.experience?.length || 0) > 0 || (extractedData.resume?.experience?.length || 0) > 0;
+  const roleScore = targetRole ? (hasExp ? 85 : 75) : 70;
   const overallScore = Math.round(techScore * 0.3 + projScore * 0.25 + activityScore * 0.2 + roleScore * 0.25);
 
   const proofClaims = claims.filter(c => c.proofRequested);
 
   return {
-    overallProfile: `Technical candidate targeting ${targetRole || 'Software Engineering'} roles with ${verifiedCount} verified skill claims across GitHub, LeetCode, and connected profiles.`,
+    overallProfile: `Technical candidate targeting ${targetRole || 'Software Engineering'} roles with ${verifiedCount} verified skill claims across GitHub, LeetCode, GeeksforGeeks, and connected profiles.`,
     already_strong_in: claims.filter(c => c.status === 'verified').map(c => c.skill),
     jobReadinessScore: overallScore,
     scoreExplanation: `Calculated readiness score of ${overallScore}/100 across verified multi-source evidence (${projScore}%), technical skills (${techScore}%), coding activity (${activityScore}%), and role alignment (${roleScore}%).`,
