@@ -964,9 +964,9 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
                       )}
                     </div>
 
-                    {(milestone.why_for_this_candidate || milestone.reason) && (
+                    {milestone.reason && (
                       <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
-                        {milestone.why_for_this_candidate || milestone.reason}
+                        {milestone.reason}
                       </div>
                     )}
 
@@ -993,12 +993,7 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
                                 </span>
                               )}
                             </div>
-                            {task.why_for_this_candidate && (
-                              <div style={{ fontSize: '0.8rem', color: 'var(--horizon-cyan)', opacity: 0.9, lineHeight: 1.4 }}>
-                                <strong>Why for you: </strong>{task.why_for_this_candidate}
-                              </div>
-                            )}
-                            {task.description && task.description !== task.why_for_this_candidate && (
+                            {task.description && (
                               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                                 {task.description}
                               </div>
@@ -1009,26 +1004,18 @@ export function PersonalizedLearningRoadmap({ analysis, mode = 'all' }) {
                                 <span>Completion Criteria: {task.completion_criteria}</span>
                               </div>
                             )}
-                            {task.proof_of_work_outcome && (
-                              <div style={{ fontSize: '0.76rem', color: 'var(--horizon-orange)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
-                                <Sparkles size={12} style={{ flexShrink: 0 }} /> 
-                                <span>Proof Deliverable: {task.proof_of_work_outcome}</span>
-                              </div>
-                            )}
                           </div>
                         ))}
                       </div>
                     )}
 
                     {/* Milestone Deliverable Outcome */}
-                    {(milestone.proof_of_work_outcome || milestone.completion_criteria?.length > 0) && (
-                      <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                        <strong style={{ color: 'var(--horizon-orange)' }}>Proof of Work Outcome: </strong> 
-                        <span>
-                          {milestone.proof_of_work_outcome || (Array.isArray(milestone.completion_criteria) 
-                            ? milestone.completion_criteria.join(' · ') 
-                            : milestone.completion_criteria)}
-                        </span>
+                    {milestone.completion_criteria?.length > 0 && (
+                      <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        <strong>Proof of Work Outcome: </strong> 
+                        {Array.isArray(milestone.completion_criteria) 
+                          ? milestone.completion_criteria.join(' · ') 
+                          : milestone.completion_criteria}
                       </div>
                     )}
                   </div>

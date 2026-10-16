@@ -4,6 +4,7 @@ import api from '../api/axios';
 import { ScoreRing, ScoreBar } from '../components/ScoreComponents';
 import { ClaimCard } from '../components/ClaimCard';
 import { LeetCodeBreakdown } from '../components/LeetCodeBreakdown';
+import { GeeksforGeeksBreakdown } from '../components/GeeksforGeeksBreakdown';
 import { LinkedInBreakdown } from '../components/LinkedInBreakdown';
 import { PortfolioBreakdown } from '../components/PortfolioBreakdown';
 import { PersonalizedLearningRoadmap } from '../components/PersonalizedLearningRoadmap';
@@ -51,6 +52,7 @@ export default function StudentAnalysisView() {
   const recs = analysis?.recommendations || {};
   const roadmap = analysis?.roadmap || {};
   const leetcodeData = analysis?.extractedData?.leetcode;
+  const gfgData = analysis?.extractedData?.gfg;
   const linkedinData = analysis?.extractedData?.linkedin;
   const portfolioData = analysis?.extractedData?.portfolio || (analysis?.sourceTexts?.portfolioText ? { extracted: true, plainTextSummary: analysis.sourceTexts.portfolioText } : null);
 
@@ -58,6 +60,7 @@ export default function StudentAnalysisView() {
     { id: 'overview', label: 'Overview' },
     ...(portfolioData ? [{ id: 'portfolio', label: 'Portfolio' }] : []),
     ...(leetcodeData ? [{ id: 'leetcode', label: `LeetCode (${leetcodeData.totalSolved ?? 0})` }] : []),
+    ...(gfgData ? [{ id: 'gfg', label: `GeeksforGeeks (${gfgData.totalProblemsSolved ?? 0})` }] : []),
     ...(linkedinData ? [{ id: 'linkedin', label: 'LinkedIn' }] : []),
     { id: 'claims', label: 'Claims' },
     { id: 'scores', label: 'Scores' },
@@ -166,6 +169,10 @@ export default function StudentAnalysisView() {
 
           {tab === 'leetcode' && (
             <LeetCodeBreakdown data={leetcodeData} url={student.leetcodeUrl} />
+          )}
+
+          {tab === 'gfg' && (
+            <GeeksforGeeksBreakdown data={gfgData} url={student.gfgUrl || gfgData?.sourceUrl} />
           )}
 
           {tab === 'linkedin' && (
